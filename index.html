@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#07152f" />
-  <meta name="description" content="Cuenta regresiva para nuestro viaje a Disney — 12 de enero de 2027." />
+  <meta name="description" content="Cuenta regresiva para nuestro viaje a Disney." />
   <title>Cuenta regresiva a Disney ✨</title>
   <style>
     :root {
@@ -237,7 +237,7 @@
       <div class="eyebrow"><span class="spark">✦</span> Próxima parada: Orlando <span class="spark">✦</span></div>
       <h1 id="title">La magia está cada vez más cerca</h1>
       <p class="subtitle">Cuenta regresiva para nuestro viaje a Disney. Cada segundo que pasa falta un poquito menos para estar ahí.</p>
-      <div class="date-pill" aria-label="Fecha de llegada: 12 de enero de 2027">🏰 12 · ENE · 2027</div>
+      <div id="datePill" class="date-pill" aria-label="Fecha de llegada: 12 de enero de 2027">🏰 12 · ENE · 2027</div>
 
       <div id="countdown" class="countdown" aria-live="polite" aria-label="Tiempo restante para el viaje">
         <div class="unit"><div class="number" id="days">000</div><div class="label">Días</div></div>
@@ -261,14 +261,35 @@
         </div>
       </div>
 
-      <p class="footer">Hora objetivo: 00:00 del 12/01/2027 en Orlando, Florida.</p>
+      <p id="targetInfo" class="footer">Hora objetivo: 00:00 del 12/01/2027 en Orlando, Florida.</p>
       <p class="photo-credit">Foto del castillo: Gsink / Wikimedia Commons · CC0</p>
     </section>
   </main>
 
   <script>
     (() => {
-      const target = new Date('2027-01-12T00:00:00-05:00').getTime();
+      const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      const spainTimeZones = new Set(['Europe/Madrid', 'Atlantic/Canary', 'Africa/Ceuta']);
+      const isSpain = spainTimeZones.has(browserTimeZone);
+      const isCanaryIslands = browserTimeZone === 'Atlantic/Canary';
+
+      const destination = isSpain
+        ? {
+            targetIso: isCanaryIslands
+              ? '2027-01-10T00:00:00+00:00'
+              : '2027-01-10T00:00:00+01:00',
+            dateText: '🏰 10 · ENE · 2027',
+            dateAriaLabel: 'Fecha de llegada: 10 de enero de 2027',
+            targetInfo: `Hora objetivo: 00:00 del 10/01/2027 en España (${browserTimeZone}).`
+          }
+        : {
+            targetIso: '2027-01-12T00:00:00-05:00',
+            dateText: '🏰 12 · ENE · 2027',
+            dateAriaLabel: 'Fecha de llegada: 12 de enero de 2027',
+            targetInfo: 'Hora objetivo: 00:00 del 12/01/2027 en Orlando, Florida.'
+          };
+
+      const target = new Date(destination.targetIso).getTime();
       const tripCountdownStart = new Date('2026-09-02T00:00:00-03:00').getTime();
       const els = {
         countdown: document.getElementById('countdown'),
@@ -278,8 +299,14 @@
         minutes: document.getElementById('minutes'),
         seconds: document.getElementById('seconds'),
         progressBar: document.getElementById('progressBar'),
-        progressText: document.getElementById('progressText')
+        progressText: document.getElementById('progressText'),
+        datePill: document.getElementById('datePill'),
+        targetInfo: document.getElementById('targetInfo')
       };
+
+      els.datePill.textContent = destination.dateText;
+      els.datePill.setAttribute('aria-label', destination.dateAriaLabel);
+      els.targetInfo.textContent = destination.targetInfo;
 
       const pad = (value, size = 2) => String(value).padStart(size, '0');
 
