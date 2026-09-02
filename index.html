@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07152f" />
+  <meta name="description" content="Cuenta regresiva para nuestro viaje a Disney — 12 de enero de 2027." />
+  <title>Cuenta regresiva a Disney ✨</title>
+  <style>
+    :root {
+      --night: #06132c;
+      --night-2: #0b2450;
+      --blue: #49a8ff;
+      --blue-soft: #a9ddff;
+      --gold: #ffd86f;
+      --pink: #ff9dcc;
+      --white: #f8fbff;
+      --muted: #c8d8ef;
+      --glass-border: rgba(255, 255, 255, 0.20);
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--white);
+      background:
+        radial-gradient(circle at 18% 22%, rgba(73, 168, 255, .24), transparent 28%),
+        radial-gradient(circle at 80% 18%, rgba(255, 157, 204, .18), transparent 26%),
+        radial-gradient(circle at 50% 105%, rgba(125, 80, 255, .22), transparent 33%),
+        linear-gradient(160deg, var(--night-2), var(--night) 62%);
+      overflow-x: hidden;
+    }
+    .stars, .stars::before, .stars::after {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      background-image:
+        radial-gradient(circle, rgba(255,255,255,.85) 1px, transparent 1.5px),
+        radial-gradient(circle, rgba(255,216,111,.82) 1px, transparent 1.6px);
+      background-size: 92px 92px, 137px 137px;
+      background-position: 11px 17px, 45px 61px;
+      opacity: .42;
+      animation: twinkle 6s ease-in-out infinite alternate;
+    }
+    .stars::before { transform: translate3d(33px, 21px, 0); opacity: .35; animation-delay: -2s; }
+    .stars::after { transform: translate3d(-25px, 42px, 0); opacity: .25; animation-delay: -4s; }
+    @keyframes twinkle { from { opacity: .28; } to { opacity: .58; } }
+    .page {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px 18px;
+      position: relative;
+      isolation: isolate;
+    }
+    .shooting-star {
+      position: absolute;
+      top: 15%;
+      left: 8%;
+      width: 110px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.95));
+      transform: rotate(-22deg);
+      filter: drop-shadow(0 0 7px #fff);
+      opacity: .7;
+      animation: drift 7s ease-in-out infinite;
+      z-index: -1;
+    }
+    @keyframes drift {
+      0%, 100% { transform: translate(0, 0) rotate(-22deg); opacity: .18; }
+      45% { opacity: .9; }
+      60% { transform: translate(55vw, 18vh) rotate(-22deg); opacity: 0; }
+    }
+    .card {
+      width: min(970px, 100%);
+      padding: clamp(28px, 5vw, 58px);
+      text-align: center;
+      background: linear-gradient(160deg, rgba(255,255,255,.13), rgba(255,255,255,.065));
+      border: 1px solid var(--glass-border);
+      border-radius: 34px;
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.16);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      right: -130px;
+      top: -150px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(73,168,255,.23), transparent 68%);
+      pointer-events: none;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 18px;
+      padding: 8px 14px;
+      border: 1px solid rgba(255,255,255,.17);
+      border-radius: 999px;
+      background: rgba(255,255,255,.07);
+      color: var(--blue-soft);
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .spark { color: var(--gold); }
+    h1 {
+      margin: 0;
+      font-size: clamp(2.35rem, 8vw, 5.8rem);
+      line-height: .96;
+      letter-spacing: -.055em;
+      text-wrap: balance;
+      background: linear-gradient(180deg, #fff 12%, #dbefff 66%, #9bcfff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 8px 22px rgba(73,168,255,.16));
+    }
+    .subtitle {
+      margin: 20px auto 0;
+      max-width: 650px;
+      color: var(--muted);
+      font-size: clamp(1rem, 2.3vw, 1.22rem);
+      line-height: 1.6;
+    }
+    .date-pill {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 22px;
+      color: #07152f;
+      background: linear-gradient(135deg, #fff2a7, var(--gold));
+      padding: 10px 15px;
+      border-radius: 999px;
+      font-weight: 800;
+      box-shadow: 0 12px 30px rgba(255,216,111,.18);
+    }
+    .countdown {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: clamp(34px, 6vw, 54px) 0 26px;
+    }
+    .unit {
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 6px;
+      padding: 22px 10px;
+      border-radius: 24px;
+      background: rgba(3, 15, 39, .42);
+      border: 1px solid rgba(255,255,255,.13);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
+    }
+    .number {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(2.2rem, 7vw, 4.6rem);
+      line-height: .95;
+      font-weight: 850;
+      letter-spacing: -.05em;
+      color: #fff;
+      text-shadow: 0 0 26px rgba(73,168,255,.18);
+    }
+    .label {
+      color: var(--blue-soft);
+      font-size: .78rem;
+      font-weight: 750;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .progress-wrap { margin-top: 4px; }
+    .progress-copy {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: .84rem;
+    }
+    .progress-track {
+      height: 10px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--blue), var(--pink), var(--gold));
+      box-shadow: 0 0 18px rgba(73,168,255,.35);
+      transition: width .8s ease;
+    }
+    .footer { margin-top: 28px; color: rgba(226, 238, 255, .72); font-size: .86rem; }
+    .arrived {
+      display: none;
+      margin-top: 34px;
+      padding: 26px;
+      border: 1px solid rgba(255,216,111,.35);
+      border-radius: 24px;
+      background: rgba(255,216,111,.08);
+    }
+    .arrived strong {
+      display: block;
+      color: var(--gold);
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+      margin-bottom: 8px;
+    }
+    @media (max-width: 690px) {
+      .card { border-radius: 26px; padding: 30px 16px; }
+      .countdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .unit { min-height: 128px; border-radius: 20px; }
+      .progress-copy { font-size: .76rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stars" aria-hidden="true"></div>
+  <main class="page">
+    <div class="shooting-star" aria-hidden="true"></div>
+    <section class="card" aria-labelledby="title">
+      <div class="eyebrow"><span class="spark">✦</span> Próxima parada: Orlando <span class="spark">✦</span></div>
+      <h1 id="title">La magia está cada vez más cerca</h1>
+      <p class="subtitle">Cuenta regresiva para nuestro viaje a Disney. Cada segundo que pasa falta un poquito menos para estar ahí.</p>
+      <div class="date-pill" aria-label="Fecha de llegada: 12 de enero de 2027">🏰 12 · ENE · 2027</div>
+      <div id="countdown" class="countdown" aria-live="polite" aria-label="Tiempo restante para el viaje">
+        <div class="unit"><div class="number" id="days">000</div><div class="label">Días</div></div>
+        <div class="unit"><div class="number" id="hours">00</div><div class="label">Horas</div></div>
+        <div class="unit"><div class="number" id="minutes">00</div><div class="label">Minutos</div></div>
+        <div class="unit"><div class="number" id="seconds">00</div><div class="label">Segundos</div></div>
+      </div>
+      <div id="arrived" class="arrived" role="status">
+        <strong>✨ ¡Llegó el día! ✨</strong>
+        <span>Que empiece la aventura.</span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-copy">
+          <span>Cuenta regresiva iniciada</span>
+          <span id="progressText">Calculando…</span>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+      </div>
+      <p class="footer">Hora objetivo: 00:00 del 12/01/2027 en Orlando, Florida.</p>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const target = new Date('2027-01-12T00:00:00-05:00').getTime();
+      const tripCountdownStart = new Date('2026-09-02T00:00:00-03:00').getTime();
+      const els = {
+        countdown: document.getElementById('countdown'),
+        arrived: document.getElementById('arrived'),
+        days: document.getElementById('days'),
+        hours: document.getElementById('hours'),
+        minutes: document.getElementById('minutes'),
+        seconds: document.getElementById('seconds'),
+        progressBar: document.getElementById('progressBar'),
+        progressText: document.getElementById('progressText')
+      };
+      const pad = (value, size = 2) => String(value).padStart(size, '0');
+      function update() {
+        const now = Date.now();
+        const distance = target - now;
+        if (distance <= 0) {
+          els.countdown.style.display = 'none';
+          els.arrived.style.display = 'block';
+          els.progressBar.style.width = '100%';
+          els.progressText.textContent = '100% · ¡Ya estamos!';
+          document.title = '¡Llegó el día! ✨';
+          return;
+        }
+        const dayMs = 1000 * 60 * 60 * 24;
+        const days = Math.floor(distance / dayMs);
+        const hours = Math.floor((distance % dayMs) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        els.days.textContent = pad(days, 3);
+        els.hours.textContent = pad(hours);
+        els.minutes.textContent = pad(minutes);
+        els.seconds.textContent = pad(seconds);
+        const total = target - tripCountdownStart;
+        const elapsed = Math.max(0, now - tripCountdownStart);
+        const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+        els.progressBar.style.width = `${pct.toFixed(2)}%`;
+        els.progressText.textContent = `${pct.toFixed(1)}% del camino`;
+        document.title = `${days} días para Disney ✨`;
+      }
+      update();
+      setInterval(update, 1000);
+    })();
+  </script>
+</body>
+</html>
