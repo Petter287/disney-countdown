@@ -8,21 +8,26 @@ const STRONG_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const $ = (id) => document.getElementById(id);
 
+const authGate = $('authGate');
+const tripGate = $('tripGate');
+const tripList = $('tripList');
+const tripGateStatus = $('tripGateStatus');
+const tripShell = $('tripShell');
+const loginFields = $('loginFields');
 const passwordGate = $('changePasswordForm');
 const authStatus = $('authStatus');
-const memberStatus = $('memberStatus');
-const tripShell = $('tripShell');
-const authGate = $('authGate');
-const loginFields = $('loginFields');
 const adminPanel = $('adminPanel');
+const memberStatus = $('memberStatus');
 const membersContainer = $('members');
 const memberRole = $('memberRole');
 
-let membership = null;
+let currentUser = null;
+let currentTrip = null;
+let currentMembership = null;
+let tripMemberships = [];
 let roles = [];
 let privateModal;
 let countdownTimer;
-let tripSettings = null;
 
 function setStatus(element, message = '', type = '') {
   element.textContent = message;
@@ -38,15 +43,40 @@ function resetMemberForm() {
 
 function clearTripUi() {
   clearInterval(countdownTimer);
-  tripSettings = null;
+  countdownTimer = null;
+  currentTrip = null;
+  currentMembership = null;
   tripShell.replaceChildren();
   tripShell.classList.remove('visible');
   tripShell.setAttribute('aria-hidden', 'true');
+  adminPanel.classList.remove('visible');
+  membersContainer.replaceChildren();
+  resetMemberForm();
 }
 
-function lockTrip() {
+function hideAllGates() {
+  authGate.classList.add('hidden');
+  tripGate.classList.remove('visible');
+  tripGate.setAttribute('aria-hidden', 'true');
+}
+
+function showLogin(message = '', type = '') {
   clearTripUi();
+  tripMemberships = [];
+  tripList.replaceChildren();
+  tripGate.classList.remove('visible');
+  tripGate.setAttribute('aria-hidden', 'true');
   authGate.classList.remove('hidden');
+  loginFields.classList.remove('d-none');
+  passwordGate.classList.remove('visible');
+  setStatus(authStatus, message, type);
+}
+
+function showTripPicker() {
+  clearTripUi();
+  authGate.classList.add('hidden');
+  tripGate.classList.add('visible');
+  tripGate.setAttribute('aria-hidden', 'false');
 }
 
 async function callAccessApi(payload) {
@@ -72,26 +102,96 @@ async function callAccessApi(payload) {
   return body;
 }
 
-async function getMember(user) {
-  if (!user?.email) return null;
+async function loadUserTrips(user) {
   const { data, error } = await supabase
     .from('trip_members')
-    .select('email,display_name,role_id,is_owner,must_change_password,roles(code,name)')
-    .eq('email', user.email.toLowerCase())
-    .maybeSingle();
+    .select('trip_id,role_id,is_owner,must_change_password,roles(code,name),trips(id,slug,name,destination,starts_on,ends_on)')
+    .eq('user_id', user.id)
+    .order('created_at');
 
   if (error) {
-    console.error('Unable to load membership', error);
+    console.error('Unable to load trips', error);
     return null;
   }
-  return data;
+  return data || [];
 }
 
-async function getTripSettings() {
+function renderTripPicker() {
+  tripList.replaceChildren();
+
+  for (const membership of tripMemberships) {
+    const trip = membership.trips;
+    if (!trip) continue;
+
+    const col = document.createElement('div');
+    col.className = 'col-12 col-md-6';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'trip-card w-100 text-start p-4';
+
+    const title = document.createElement('div');
+    title.className = 'd-flex align-items-center justify-content-between gap-3 mb-2';
+    const name = document.createElement('strong');
+    name.className = 'fs-5';
+    name.textContent = `✈️ ${trip.name}`;
+    const badge = document.createElement('span');
+    badge.className = 'badge role-badge';
+    badge.textContent = membership.roles?.name || 'Sin rol';
+    title.append(name, badge);
+
+    const destination = document.createElement('div');
+    destination.className = 'trip-muted';
+    destination.textContent = trip.destination;
+
+    const hint = document.createElement('div');
+    hint.className = 'small mt-3';
+    hint.textContent = 'Abrir viaje →';
+
+    button.append(title, destination, hint);
+    button.addEventListener('click', () => openTrip(membership));
+    col.append(button);
+    tripList.append(col);
+  }
+
+  setStatus(tripGateStatus, tripMemberships.length ? '' : 'No tenés viajes disponibles.', tripMemberships.length ? '' : 'error');
+}
+
+async function authorize(user) {
+  currentUser = user;
+  tripMemberships = await loadUserTrips(user);
+
+  if (!tripMemberships) {
+    await supabase.auth.signOut();
+    showLogin('No se pudieron cargar tus accesos.', 'error');
+    return;
+  }
+
+  if (!tripMemberships.length) {
+    await supabase.auth.signOut();
+    showLogin('Tu cuenta existe, pero no tenés acceso a ningún viaje.', 'error');
+    return;
+  }
+
+  if (tripMemberships.some((membership) => membership.must_change_password)) {
+    clearTripUi();
+    tripGate.classList.remove('visible');
+    loginFields.classList.add('d-none');
+    passwordGate.classList.add('visible');
+    authGate.classList.remove('hidden');
+    setStatus(authStatus, 'Por seguridad, cambiá la contraseña temporal antes de continuar.');
+    return;
+  }
+
+  renderTripPicker();
+  showTripPicker();
+}
+
+async function getTripSettings(tripId) {
   const { data, error } = await supabase
     .from('trip_settings')
-    .select('eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at')
-    .eq('id', 1)
+    .select('trip_id,eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at')
+    .eq('trip_id', tripId)
     .maybeSingle();
 
   if (error || !data) {
@@ -104,6 +204,7 @@ async function getTripSettings() {
 function renderTripShell(settings) {
   tripShell.innerHTML = `
     <button id="openTrip" class="btn btn-dark position-fixed top-0 end-0 m-3 rounded-pill z-3" type="button">✨ Mi viaje</button>
+    <button id="quickChangeTrip" class="btn btn-dark position-fixed top-0 start-0 m-3 rounded-pill z-3" type="button">🌎 Mis viajes</button>
     <main class="container min-vh-100 d-flex align-items-center justify-content-center py-3">
       <section class="countdown-card w-100 p-4 text-center">
         <div id="tripEyebrow" class="eyebrow mb-2"></div>
@@ -127,61 +228,46 @@ function renderTripShell(settings) {
   $('tripTitle').textContent = settings.title;
   $('tripSubtitle').textContent = settings.subtitle;
   $('openTrip').addEventListener('click', () => privateModal.show());
+  $('quickChangeTrip').addEventListener('click', changeTrip);
   tripShell.setAttribute('aria-hidden', 'false');
 }
 
-function renderUserLine(user) {
+function renderUserLine() {
   const userLine = $('userLine');
   const badge = document.createElement('span');
   badge.className = 'badge role-badge';
-  badge.textContent = membership?.roles?.name || 'Sin rol';
-
-  userLine.replaceChildren(
-    document.createTextNode(`${user.email} · `),
-    badge,
-  );
+  badge.textContent = currentMembership?.roles?.name || 'Sin rol';
+  userLine.replaceChildren(document.createTextNode(`${currentUser?.email || ''} · `), badge);
 }
 
-async function authorize(user) {
-  membership = await getMember(user);
-  if (!membership) {
-    await supabase.auth.signOut();
-    lockTrip();
-    setStatus(authStatus, 'No tenés acceso a este viaje.', 'error');
-    return false;
+async function openTrip(membership) {
+  const trip = membership.trips;
+  if (!trip) return;
+
+  const settings = await getTripSettings(trip.id);
+  if (!settings) {
+    setStatus(tripGateStatus, 'No se pudo cargar la configuración de este viaje.', 'error');
+    return;
   }
 
-  if (membership.must_change_password) {
-    clearTripUi();
-    loginFields.classList.add('d-none');
-    passwordGate.classList.add('visible');
-    authGate.classList.remove('hidden');
-    setStatus(authStatus, 'Por seguridad, cambiá la contraseña temporal antes de continuar.');
-    return false;
-  }
-
-  tripSettings = await getTripSettings();
-  if (!tripSettings) {
-    await supabase.auth.signOut();
-    lockTrip();
-    setStatus(authStatus, 'No se pudo cargar la información protegida del viaje.', 'error');
-    return false;
-  }
-
-  renderTripShell(tripSettings);
-  authGate.classList.add('hidden');
+  currentTrip = trip;
+  currentMembership = membership;
+  hideAllGates();
+  renderTripShell(settings);
   tripShell.classList.add('visible');
-  renderUserLine(user);
+  $('privateTripTitle').textContent = `✨ ${trip.name}`;
+  renderUserLine();
 
   const isAdmin = membership.roles?.code === 'admin';
   adminPanel.classList.toggle('visible', isAdmin);
   if (isAdmin) {
     await loadRoles();
     await loadMembers();
+  } else {
+    membersContainer.replaceChildren();
   }
 
-  startCountdown(tripSettings);
-  return true;
+  startCountdown(settings);
 }
 
 async function loadRoles() {
@@ -209,7 +295,7 @@ function buildMemberRow(member) {
   const info = document.createElement('div');
   info.className = 'me-auto';
   const email = document.createElement('strong');
-  email.textContent = member.email;
+  email.textContent = member.profiles?.email || 'Usuario';
   const roleName = document.createElement('div');
   roleName.className = 'small trip-muted';
   roleName.textContent = member.roles?.name || '';
@@ -225,7 +311,7 @@ function buildMemberRow(member) {
   }
 
   const roleSelect = document.createElement('select');
-  roleSelect.className = 'form-select form-select-sm role-change w-auto';
+  roleSelect.className = 'form-select form-select-sm w-auto';
   for (const role of roles) {
     const option = document.createElement('option');
     option.value = role.code;
@@ -237,7 +323,7 @@ function buildMemberRow(member) {
   roleSelect.addEventListener('change', async () => {
     roleSelect.disabled = true;
     try {
-      await callAccessApi({ action: 'update-role', email: member.email, role: roleSelect.value });
+      await callAccessApi({ action: 'update-role', tripId: currentTrip.id, email: member.profiles.email, role: roleSelect.value });
       setStatus(memberStatus, 'Rol actualizado.', 'ok');
       await loadMembers();
     } catch (error) {
@@ -253,8 +339,8 @@ function buildMemberRow(member) {
   removeButton.addEventListener('click', async () => {
     removeButton.disabled = true;
     try {
-      await callAccessApi({ action: 'remove', email: member.email });
-      setStatus(memberStatus, 'Acceso eliminado. La cuenta de autenticación se conserva.', 'ok');
+      await callAccessApi({ action: 'remove', tripId: currentTrip.id, email: member.profiles.email });
+      setStatus(memberStatus, 'Acceso quitado de este viaje. La cuenta se conserva.', 'ok');
       await loadMembers();
     } catch (error) {
       removeButton.disabled = false;
@@ -267,17 +353,37 @@ function buildMemberRow(member) {
 }
 
 async function loadMembers() {
+  if (!currentTrip) return;
   const { data, error } = await supabase
     .from('trip_members')
-    .select('email,role_id,is_owner,roles(code,name)')
-    .order('email');
+    .select('user_id,role_id,is_owner,roles(code,name),profiles(email,display_name)')
+    .eq('trip_id', currentTrip.id)
+    .order('created_at');
 
   if (error) {
-    setStatus(memberStatus, 'No se pudo cargar la lista.', 'error');
+    console.error('Unable to load members', error);
+    setStatus(memberStatus, 'No se pudo cargar la lista de miembros.', 'error');
     return;
   }
 
   membersContainer.replaceChildren(...(data || []).map(buildMemberRow));
+}
+
+function changeTrip() {
+  if (privateModal) privateModal.hide();
+  renderTripPicker();
+  showTripPicker();
+}
+
+async function logout() {
+  if (privateModal) privateModal.hide();
+  clearTripUi();
+  await supabase.auth.signOut();
+  currentUser = null;
+  tripMemberships = [];
+  $('loginForm').reset();
+  passwordGate.reset();
+  showLogin();
 }
 
 $('loginForm').addEventListener('submit', async (event) => {
@@ -314,6 +420,7 @@ passwordGate.addEventListener('submit', async (event) => {
   try {
     await callAccessApi({ action: 'complete-password', password });
     await supabase.auth.signOut();
+    currentUser = null;
     passwordGate.reset();
     passwordGate.classList.remove('visible');
     loginFields.classList.remove('d-none');
@@ -326,6 +433,8 @@ passwordGate.addEventListener('submit', async (event) => {
 
 $('memberForm').addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (!currentTrip) return;
+
   const email = $('memberEmail').value.trim().toLowerCase();
   const role = memberRole.value;
   const temporaryPassword = $('temporaryPassword').value;
@@ -337,32 +446,24 @@ $('memberForm').addEventListener('submit', async (event) => {
 
   setStatus(memberStatus, 'Procesando acceso…');
   try {
-    const result = await callAccessApi({ action: 'create', email, role, temporaryPassword });
+    const result = await callAccessApi({ action: 'create', tripId: currentTrip.id, email, role, temporaryPassword });
     resetMemberForm();
-    if (result.existingUser) {
-      setStatus(memberStatus, 'Acceso agregado a una cuenta existente. Conserva su contraseña actual.', 'ok');
-    } else {
-      setStatus(memberStatus, 'Usuario creado. Compartile la contraseña temporal por un medio seguro.', 'ok');
-    }
+    setStatus(
+      memberStatus,
+      result.existingUser
+        ? 'Acceso agregado a una cuenta existente. Conserva su contraseña actual.'
+        : 'Usuario creado. Compartile la contraseña temporal por un medio seguro.',
+      'ok',
+    );
     await loadMembers();
   } catch (error) {
     setStatus(memberStatus, error.message === 'SESSION_EXPIRED' ? 'La sesión venció.' : error.message, 'error');
   }
 });
 
-$('logoutButton').addEventListener('click', async () => {
-  privateModal.hide();
-  resetMemberForm();
-  await supabase.auth.signOut();
-  membership = null;
-  $('loginForm').reset();
-  passwordGate.reset();
-  loginFields.classList.remove('d-none');
-  passwordGate.classList.remove('visible');
-  setStatus(authStatus);
-  lockTrip();
-});
-
+$('changeTripButton').addEventListener('click', changeTrip);
+$('logoutButton').addEventListener('click', logout);
+$('tripGateLogout').addEventListener('click', logout);
 $('privateModal').addEventListener('hidden.bs.modal', resetMemberForm);
 
 function startCountdown(settings) {
@@ -390,61 +491,42 @@ function startCountdown(settings) {
     countdownTimer = setInterval(tick, 1000);
   };
 
-  const applyDefault = () => apply(
-    new Date(settings.default_arrival_at),
-    '🏰 12 · ENE · 2027',
-    'Llegada a Orlando · 12 de enero de 2027.',
-  );
-
   const fallback = () => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (spainZones.has(timezone)) {
-      const target = timezone === 'Atlantic/Canary'
-        ? new Date(settings.canary_arrival_at)
-        : new Date(settings.spain_arrival_at);
-      apply(target, '🏰 10 · ENE · 2027', 'Fecha ajustada a España · detección por zona horaria.');
+      const target = timezone === 'Atlantic/Canary' ? new Date(settings.canary_arrival_at) : new Date(settings.spain_arrival_at);
+      apply(target, formatArrivalDate(target), 'Fecha ajustada a España · detección por zona horaria.');
       return;
     }
-    applyDefault();
+    const target = new Date(settings.default_arrival_at);
+    apply(target, formatArrivalDate(target), 'Fecha de llegada según el viaje seleccionado.');
   };
 
-  if (!navigator.geolocation) {
-    fallback();
-    return;
-  }
+  if (!navigator.geolocation) return fallback();
 
   navigator.geolocation.getCurrentPosition(({ coords }) => {
     const { latitude, longitude } = coords;
     const boxes = [
-      [35.7, 43.9, -9.6, 4.6],
-      [38.5, 40.2, 1, 4.5],
-      [27.5, 29.6, -18.3, -13.2],
-      [35.7, 36.0, -5.5, -5.1],
-      [35.1, 35.4, -3.1, -2.8],
+      [35.7, 43.9, -9.6, 4.6], [38.5, 40.2, 1, 4.5], [27.5, 29.6, -18.3, -13.2],
+      [35.7, 36.0, -5.5, -5.1], [35.1, 35.4, -3.1, -2.8],
     ];
-    const inSpain = boxes.some(([south, north, west, east]) =>
-      latitude >= south && latitude <= north && longitude >= west && longitude <= east,
-    );
-    if (!inSpain) {
-      applyDefault();
-      return;
-    }
+    const inSpain = boxes.some(([south, north, west, east]) => latitude >= south && latitude <= north && longitude >= west && longitude <= east);
+    if (!inSpain) return fallback();
 
     const inCanaryIslands = latitude >= 27.5 && latitude <= 29.6 && longitude >= -18.3 && longitude <= -13.2;
-    const target = inCanaryIslands
-      ? new Date(settings.canary_arrival_at)
-      : new Date(settings.spain_arrival_at);
-    apply(target, '🏰 10 · ENE · 2027', 'Fecha ajustada a España · detección por ubicación.');
-  }, fallback, {
-    enableHighAccuracy: false,
-    timeout: 8000,
-    maximumAge: 3600000,
-  });
+    const target = new Date(inCanaryIslands ? settings.canary_arrival_at : settings.spain_arrival_at);
+    apply(target, formatArrivalDate(target), 'Fecha ajustada a España · detección por ubicación.');
+  }, fallback, { enableHighAccuracy: false, timeout: 8000, maximumAge: 3600000 });
+}
+
+function formatArrivalDate(date) {
+  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  return `🏰 ${String(date.getDate()).padStart(2, '0')} · ${months[date.getMonth()]} · ${date.getFullYear()}`;
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
   privateModal = new bootstrap.Modal($('privateModal'));
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user) await authorize(session.user);
-  else lockTrip();
+  else showLogin();
 });
