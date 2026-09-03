@@ -10,6 +10,7 @@
   <title>Mis viajes ✨</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <link href="assets/css/styles.css" rel="stylesheet">
+  <link href="assets/css/system-users.css" rel="stylesheet">
 </head>
 <body>
   <div id="authGate" class="auth-gate">
@@ -34,9 +35,12 @@
 
   <div id="tripGate" class="trip-gate" aria-hidden="true">
     <section class="glass-panel trip-picker p-4 p-md-5">
-      <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
+      <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-3 mb-4">
         <div><div class="fs-2">🌎</div><p id="tripGreeting" class="trip-muted mb-1"></p><h1 class="h3 fw-bold mb-1">Tus viajes</h1><p class="trip-muted mb-0">Elegí qué viaje querés abrir.</p></div>
-        <button id="tripGateLogout" type="button" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+        <div class="d-flex gap-2 flex-wrap">
+          <div id="systemOwnerActions" class="system-owner-actions"><button id="manageUsersButton" type="button" class="btn btn-trip btn-sm">👥 Gestionar usuarios</button></div>
+          <button id="tripGateLogout" type="button" class="btn btn-outline-light btn-sm">Cerrar sesión</button>
+        </div>
       </div>
       <div id="tripList" class="row g-3"></div>
       <div id="tripGateStatus" class="small mt-3 trip-muted" aria-live="polite"></div>
@@ -55,16 +59,25 @@
         <div class="modal-body p-4">
           <p class="trip-muted">Área privada del viaje seleccionado. Tu rol y permisos pertenecen únicamente a este viaje.</p>
           <div class="row g-3"><div class="col-md-6"><div class="private-tile p-3"><strong>✈️ Vuelos</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏨 Hoteles</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏰 Disney</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🎢 Universal</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🍽️ Reservas</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🗓️ Itinerario</strong><div class="small trip-muted">Próximamente</div></div></div></div>
+
           <section id="adminPanel" class="admin-panel border-top border-secondary mt-4 pt-4">
-            <h3 class="h5 fw-bold">👥 Administración de acceso</h3><p class="trip-muted small">Estos accesos afectan solamente al viaje seleccionado.</p>
-            <form id="memberForm" class="row g-3 align-items-end" autocomplete="off">
-              <div class="col-lg-4"><label for="memberEmail" class="form-label">Email</label><input id="memberEmail" class="form-control" type="email" required maxlength="254" placeholder="persona@email.com" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" data-1p-ignore></div>
-              <div class="col-lg-3"><label for="memberRole" class="form-label">Rol</label><select id="memberRole" class="form-select" required></select></div>
-              <div class="col-lg-3"><label for="temporaryPassword" class="form-label">Contraseña temporal</label><input id="temporaryPassword" class="form-control" type="password" minlength="8" autocomplete="new-password" aria-describedby="temporaryPasswordHelp"></div>
-              <div class="col-lg-2 d-grid"><button class="btn btn-trip" type="submit">Agregar acceso</button></div>
-              <div class="col-12"><div id="temporaryPasswordHelp" class="form-text text-light opacity-75 mt-0">Solo se usa si el email todavía no tiene una cuenta de autenticación.</div></div>
+            <h3 class="h5 fw-bold">👥 Participantes del viaje</h3>
+            <p class="trip-muted small">Los administradores del viaje solo pueden agregar usuarios que ya existen y tienen acceso activo al sistema.</p>
+            <form id="tripMemberForm" autocomplete="off">
+              <div class="row g-3 align-items-end">
+                <div class="col-lg-9">
+                  <label class="form-label">Usuarios disponibles</label>
+                  <div id="availableUsersList" class="available-users"></div>
+                </div>
+                <div class="col-lg-3">
+                  <label for="tripMemberRole" class="form-label">Rol para seleccionados</label>
+                  <select id="tripMemberRole" class="form-select" required></select>
+                  <button class="btn btn-trip w-100 mt-3" type="submit">Agregar al viaje</button>
+                </div>
+              </div>
             </form>
-            <div id="memberStatus" class="small mt-2 trip-muted" aria-live="polite"></div><div id="members" class="d-grid gap-2 mt-3"></div>
+            <div id="tripMemberStatus" class="small mt-2 trip-muted" aria-live="polite"></div>
+            <div id="members" class="d-grid gap-2 mt-3"></div>
           </section>
         </div>
         <div class="modal-footer border-secondary d-flex gap-2"><button id="changeTripButton" class="btn btn-outline-info flex-fill" type="button">Cambiar viaje</button><button id="logoutButton" class="btn btn-outline-light flex-fill" type="button">Cerrar sesión</button></div>
@@ -72,8 +85,40 @@
     </div>
   </div>
 
+  <div class="modal fade user-manager-modal" id="userManagerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+      <div class="modal-content glass-panel text-white">
+        <div class="modal-header border-secondary">
+          <div><h2 class="modal-title h4 fw-bold">👥 Gestor de usuarios</h2><p class="small trip-muted mb-0">Acceso global al sistema, datos personales y asignación de viajes.</p></div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="d-flex justify-content-between align-items-center gap-3 mb-3"><h3 class="h5 mb-0">Usuarios del sistema</h3><button id="newSystemUserButton" type="button" class="btn btn-trip btn-sm">+ Agregar usuario</button></div>
+          <div id="userManagerStatus" class="small mb-3 trip-muted" aria-live="polite"></div>
+          <div class="row g-4">
+            <div class="col-lg-6"><div id="systemUserList" class="user-manager-list d-grid gap-2"></div></div>
+            <div class="col-lg-6">
+              <div class="user-card p-3 p-md-4">
+                <div class="d-flex align-items-center justify-content-between gap-3 mb-3"><h3 id="systemUserFormTitle" class="h5 mb-0">Agregar usuario</h3><button id="cancelSystemUserEdit" type="button" class="btn btn-outline-light btn-sm">Limpiar</button></div>
+                <form id="systemUserForm" autocomplete="off">
+                  <div class="mb-3"><label for="systemUserName" class="form-label">Nombre</label><input id="systemUserName" class="form-control" required maxlength="120"></div>
+                  <div class="mb-3"><label for="systemUserEmail" class="form-label">Email</label><input id="systemUserEmail" class="form-control" type="email" required maxlength="254" autocomplete="off"></div>
+                  <div id="systemUserPasswordGroup" class="mb-3"><label for="systemUserPassword" class="form-label">Contraseña temporal</label><input id="systemUserPassword" class="form-control" type="password" minlength="8" autocomplete="new-password"><div class="form-text text-light opacity-75">Solo al crear la cuenta. El usuario deberá cambiarla al ingresar.</div></div>
+                  <div class="form-check form-switch mb-3"><input id="systemUserEnabled" class="form-check-input" type="checkbox" checked><label for="systemUserEnabled" class="form-check-label">Acceso al sistema habilitado</label></div>
+                  <h4 class="h6 fw-bold mt-4">Viajes y roles</h4>
+                  <div id="systemUserAssignments" class="d-grid gap-2"></div>
+                  <div id="systemUserFormStatus" class="small mt-2 trip-muted" aria-live="polite"></div>
+                  <button class="btn btn-trip w-100 mt-3" type="submit">Guardar usuario</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-  <script type="module" src="assets/js/app.js"></script>
-  <script type="module" src="assets/js/trip-greeting.js"></script>
+  <script type="module" src="assets/js/app-system.js"></script>
 </body>
 </html>
