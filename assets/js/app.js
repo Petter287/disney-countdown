@@ -49,6 +49,7 @@ function clearTripUi() {
   tripShell.replaceChildren();
   tripShell.classList.remove('visible');
   tripShell.setAttribute('aria-hidden', 'true');
+  tripShell.style.removeProperty('--trip-background-image');
   adminPanel.classList.remove('visible');
   membersContainer.replaceChildren();
   resetMemberForm();
@@ -154,7 +155,11 @@ function renderTripPicker() {
     tripList.append(col);
   }
 
-  setStatus(tripGateStatus, tripMemberships.length ? '' : 'No tenés viajes disponibles.', tripMemberships.length ? '' : 'error');
+  setStatus(
+    tripGateStatus,
+    tripMemberships.length ? '' : 'No tenés viajes disponibles.',
+    tripMemberships.length ? '' : 'error',
+  );
 }
 
 async function authorize(user) {
@@ -190,7 +195,7 @@ async function authorize(user) {
 async function getTripSettings(tripId) {
   const { data, error } = await supabase
     .from('trip_settings')
-    .select('trip_id,eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at')
+    .select('trip_id,eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at,background_url,photo_credit')
     .eq('trip_id', tripId)
     .maybeSingle();
 
@@ -199,6 +204,18 @@ async function getTripSettings(tripId) {
     return null;
   }
   return data;
+}
+
+function applyTripBackground(settings) {
+  if (!settings.background_url) return;
+
+  try {
+    const backgroundUrl = new URL(settings.background_url);
+    if (backgroundUrl.protocol !== 'https:') return;
+    tripShell.style.setProperty('--trip-background-image', `url("${backgroundUrl.href}")`);
+  } catch {
+    // Invalid URLs simply fall back to the default background.
+  }
 }
 
 function renderTripShell(settings) {
@@ -220,15 +237,17 @@ function renderTripShell(settings) {
         <div class="d-flex justify-content-between small trip-muted mb-2"><span>Cuenta regresiva iniciada</span><span id="progressText">Calculando…</span></div>
         <div class="progress rounded-pill"><div id="progressBar" class="progress-bar"></div></div>
         <p id="targetInfo" class="small trip-muted mt-3 mb-1">Calculando fecha…</p>
-        <p class="photo-credit mb-0">Foto del castillo: Gsink / Wikimedia Commons · CC0</p>
+        <p id="photoCredit" class="photo-credit mb-0"></p>
       </section>
     </main>`;
 
   $('tripEyebrow').textContent = settings.eyebrow;
   $('tripTitle').textContent = settings.title;
   $('tripSubtitle').textContent = settings.subtitle;
+  $('photoCredit').textContent = settings.photo_credit || '';
   $('openTrip').addEventListener('click', () => privateModal.show());
   $('quickChangeTrip').addEventListener('click', changeTrip);
+  applyTripBackground(settings);
   tripShell.setAttribute('aria-hidden', 'false');
 }
 
@@ -292,10 +311,11 @@ function buildMemberRow(member) {
   const row = document.createElement('div');
   row.className = 'member-row p-3 d-flex flex-column flex-md-row gap-2 align-items-md-center';
 
+  const targetEmail = member.profiles?.email || '';
   const info = document.createElement('div');
   info.className = 'me-auto';
   const email = document.createElement('strong');
-  email.textContent = member.profiles?.email || 'Usuario';
+  email.textContent = targetEmail || 'Usuario';
   const roleName = document.createElement('div');
   roleName.className = 'small trip-muted';
   roleName.textContent = member.roles?.name || '';
@@ -321,9 +341,15 @@ function buildMemberRow(member) {
   }
 
   roleSelect.addEventListener('change', async () => {
+    if (!targetEmail) return;
     roleSelect.disabled = true;
     try {
-      await callAccessApi({ action: 'update-role', tripId: currentTrip.id, email: member.profiles.email, role: roleSelect.value });
+      await callAccessApi({
+        action: 'update-role',
+        tripId: currentTrip.id,
+        email: targetEmail,
+        role: roleSelect.value,
+      });
       setStatus(memberStatus, 'Rol actualizado.', 'ok');
       await loadMembers();
     } catch (error) {
@@ -337,9 +363,10 @@ function buildMemberRow(member) {
   removeButton.className = 'btn btn-outline-danger btn-sm';
   removeButton.textContent = 'Quitar';
   removeButton.addEventListener('click', async () => {
+    if (!targetEmail) return;
     removeButton.disabled = true;
     try {
-      await callAccessApi({ action: 'remove', tripId: currentTrip.id, email: member.profiles.email });
+      await callAccessApi({ action: 'remove', tripId: currentTrip.id, email: targetEmail });
       setStatus(memberStatus, 'Acceso quitado de este viaje. La cuenta se conserva.', 'ok');
       await loadMembers();
     } catch (error) {
@@ -446,7 +473,13 @@ $('memberForm').addEventListener('submit', async (event) => {
 
   setStatus(memberStatus, 'Procesando acceso…');
   try {
-    const result = await callAccessApi({ action: 'create', tripId: currentTrip.id, email, role, temporaryPassword });
+    const result = await callAccessApi({
+      action: 'create',
+      tripId: currentTrip.id,
+      email,
+      role,
+      temporaryPassword,
+    });
     resetMemberForm();
     setStatus(
       memberStatus,
@@ -491,37 +524,80 @@ function startCountdown(settings) {
     countdownTimer = setInterval(tick, 1000);
   };
 
-  const fallback = () => {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (spainZones.has(timezone)) {
-      const target = timezone === 'Atlantic/Canary' ? new Date(settings.canary_arrival_at) : new Date(settings.spain_arrival_at);
-      apply(target, formatArrivalDate(target), 'Fecha ajustada a España · detección por zona horaria.');
-      return;
-    }
+  const useDefaultArrival = () => {
     const target = new Date(settings.default_arrival_at);
-    apply(target, formatArrivalDate(target), 'Fecha de llegada según el viaje seleccionado.');
+    apply(
+      target,
+      formatArrivalDate(target, 'America/New_York'),
+      'Fecha de llegada según el viaje seleccionado.',
+    );
   };
 
-  if (!navigator.geolocation) return fallback();
+  const fallback = () => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (settings.spain_arrival_at && spainZones.has(timezone)) {
+      const isCanary = timezone === 'Atlantic/Canary';
+      const source = isCanary && settings.canary_arrival_at ? settings.canary_arrival_at : settings.spain_arrival_at;
+      const target = new Date(source);
+      apply(
+        target,
+        formatArrivalDate(target, isCanary ? 'Atlantic/Canary' : 'Europe/Madrid'),
+        'Fecha ajustada a España · detección por zona horaria.',
+      );
+      return;
+    }
+    useDefaultArrival();
+  };
+
+  if (!settings.spain_arrival_at || !navigator.geolocation) {
+    fallback();
+    return;
+  }
 
   navigator.geolocation.getCurrentPosition(({ coords }) => {
     const { latitude, longitude } = coords;
     const boxes = [
-      [35.7, 43.9, -9.6, 4.6], [38.5, 40.2, 1, 4.5], [27.5, 29.6, -18.3, -13.2],
-      [35.7, 36.0, -5.5, -5.1], [35.1, 35.4, -3.1, -2.8],
+      [35.7, 43.9, -9.6, 4.6],
+      [38.5, 40.2, 1, 4.5],
+      [27.5, 29.6, -18.3, -13.2],
+      [35.7, 36.0, -5.5, -5.1],
+      [35.1, 35.4, -3.1, -2.8],
     ];
-    const inSpain = boxes.some(([south, north, west, east]) => latitude >= south && latitude <= north && longitude >= west && longitude <= east);
-    if (!inSpain) return fallback();
+    const inSpain = boxes.some(([south, north, west, east]) =>
+      latitude >= south && latitude <= north && longitude >= west && longitude <= east,
+    );
+    if (!inSpain) {
+      useDefaultArrival();
+      return;
+    }
 
     const inCanaryIslands = latitude >= 27.5 && latitude <= 29.6 && longitude >= -18.3 && longitude <= -13.2;
-    const target = new Date(inCanaryIslands ? settings.canary_arrival_at : settings.spain_arrival_at);
-    apply(target, formatArrivalDate(target), 'Fecha ajustada a España · detección por ubicación.');
-  }, fallback, { enableHighAccuracy: false, timeout: 8000, maximumAge: 3600000 });
+    const source = inCanaryIslands && settings.canary_arrival_at
+      ? settings.canary_arrival_at
+      : settings.spain_arrival_at;
+    const target = new Date(source);
+    apply(
+      target,
+      formatArrivalDate(target, inCanaryIslands ? 'Atlantic/Canary' : 'Europe/Madrid'),
+      'Fecha ajustada a España · detección por ubicación.',
+    );
+  }, fallback, {
+    enableHighAccuracy: false,
+    timeout: 8000,
+    maximumAge: 3600000,
+  });
 }
 
-function formatArrivalDate(date) {
-  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-  return `🏰 ${String(date.getDate()).padStart(2, '0')} · ${months[date.getMonth()]} · ${date.getFullYear()}`;
+function formatArrivalDate(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone,
+  }).formatToParts(date);
+
+  const value = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `🏰 ${value('day')} · ${value('month').replace('.', '').toUpperCase()} · ${value('year')}`;
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
