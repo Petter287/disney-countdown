@@ -3,7 +3,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = 'https://ezkjmskkfepgeupampdd.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_sm6ncjG2aPyk5mCnDCLFlg_yzW5rczE';
 const ACCESS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/invite-trip-member`;
-const STRONG_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
+const STRONG_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const $ = (id) => document.getElementById(id);
@@ -22,6 +22,7 @@ let membership = null;
 let roles = [];
 let privateModal;
 let countdownTimer;
+let tripSettings = null;
 
 function setStatus(element, message = '', type = '') {
   element.textContent = message;
@@ -35,9 +36,16 @@ function resetMemberForm() {
   setStatus(memberStatus);
 }
 
-function lockTrip() {
+function clearTripUi() {
   clearInterval(countdownTimer);
+  tripSettings = null;
+  tripShell.replaceChildren();
   tripShell.classList.remove('visible');
+  tripShell.setAttribute('aria-hidden', 'true');
+}
+
+function lockTrip() {
+  clearTripUi();
   authGate.classList.remove('hidden');
 }
 
@@ -79,6 +87,49 @@ async function getMember(user) {
   return data;
 }
 
+async function getTripSettings() {
+  const { data, error } = await supabase
+    .from('trip_settings')
+    .select('eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (error || !data) {
+    console.error('Unable to load trip settings', error);
+    return null;
+  }
+  return data;
+}
+
+function renderTripShell(settings) {
+  tripShell.innerHTML = `
+    <button id="openTrip" class="btn btn-dark position-fixed top-0 end-0 m-3 rounded-pill z-3" type="button">✨ Mi viaje</button>
+    <main class="container min-vh-100 d-flex align-items-center justify-content-center py-3">
+      <section class="countdown-card w-100 p-4 text-center">
+        <div id="tripEyebrow" class="eyebrow mb-2"></div>
+        <h1 id="tripTitle" class="trip-title fw-bold mb-2"></h1>
+        <p id="tripSubtitle" class="trip-muted mb-3"></p>
+        <span id="datePill" class="badge rounded-pill date-pill px-3 py-2"></span>
+        <div class="row g-2 my-3">
+          <div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="days" class="count-number">000</div><div class="count-label">Días</div></div></div>
+          <div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="hours" class="count-number">00</div><div class="count-label">Horas</div></div></div>
+          <div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="minutes" class="count-number">00</div><div class="count-label">Minutos</div></div></div>
+          <div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="seconds" class="count-number">00</div><div class="count-label">Segundos</div></div></div>
+        </div>
+        <div class="d-flex justify-content-between small trip-muted mb-2"><span>Cuenta regresiva iniciada</span><span id="progressText">Calculando…</span></div>
+        <div class="progress rounded-pill"><div id="progressBar" class="progress-bar"></div></div>
+        <p id="targetInfo" class="small trip-muted mt-3 mb-1">Calculando fecha…</p>
+        <p class="photo-credit mb-0">Foto del castillo: Gsink / Wikimedia Commons · CC0</p>
+      </section>
+    </main>`;
+
+  $('tripEyebrow').textContent = settings.eyebrow;
+  $('tripTitle').textContent = settings.title;
+  $('tripSubtitle').textContent = settings.subtitle;
+  $('openTrip').addEventListener('click', () => privateModal.show());
+  tripShell.setAttribute('aria-hidden', 'false');
+}
+
 function renderUserLine(user) {
   const userLine = $('userLine');
   const badge = document.createElement('span');
@@ -101,6 +152,7 @@ async function authorize(user) {
   }
 
   if (membership.must_change_password) {
+    clearTripUi();
     loginFields.classList.add('d-none');
     passwordGate.classList.add('visible');
     authGate.classList.remove('hidden');
@@ -108,6 +160,15 @@ async function authorize(user) {
     return false;
   }
 
+  tripSettings = await getTripSettings();
+  if (!tripSettings) {
+    await supabase.auth.signOut();
+    lockTrip();
+    setStatus(authStatus, 'No se pudo cargar la información protegida del viaje.', 'error');
+    return false;
+  }
+
+  renderTripShell(tripSettings);
   authGate.classList.add('hidden');
   tripShell.classList.add('visible');
   renderUserLine(user);
@@ -119,7 +180,7 @@ async function authorize(user) {
     await loadMembers();
   }
 
-  startCountdown();
+  startCountdown(tripSettings);
   return true;
 }
 
@@ -245,7 +306,7 @@ passwordGate.addEventListener('submit', async (event) => {
     return;
   }
   if (!STRONG_PASSWORD_RE.test(password)) {
-    setStatus(authStatus, 'Usá al menos 12 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
+    setStatus(authStatus, 'Usá al menos 8 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
     return;
   }
 
@@ -270,7 +331,7 @@ $('memberForm').addEventListener('submit', async (event) => {
   const temporaryPassword = $('temporaryPassword').value;
 
   if (temporaryPassword && !STRONG_PASSWORD_RE.test(temporaryPassword)) {
-    setStatus(memberStatus, 'La contraseña temporal debe tener al menos 12 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
+    setStatus(memberStatus, 'La contraseña temporal debe tener al menos 8 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
     return;
   }
 
@@ -289,8 +350,6 @@ $('memberForm').addEventListener('submit', async (event) => {
   }
 });
 
-$('openTrip').addEventListener('click', () => privateModal.show());
-
 $('logoutButton').addEventListener('click', async () => {
   privateModal.hide();
   resetMemberForm();
@@ -306,8 +365,8 @@ $('logoutButton').addEventListener('click', async () => {
 
 $('privateModal').addEventListener('hidden.bs.modal', resetMemberForm);
 
-function startCountdown() {
-  const start = new Date('2026-09-02T00:00:00-03:00');
+function startCountdown(settings) {
+  const start = new Date(settings.start_at);
   const spainZones = new Set(['Europe/Madrid', 'Atlantic/Canary', 'Africa/Ceuta']);
 
   const apply = (target, label, info) => {
@@ -331,16 +390,22 @@ function startCountdown() {
     countdownTimer = setInterval(tick, 1000);
   };
 
+  const applyDefault = () => apply(
+    new Date(settings.default_arrival_at),
+    '🏰 12 · ENE · 2027',
+    'Llegada a Orlando · 12 de enero de 2027.',
+  );
+
   const fallback = () => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (spainZones.has(timezone)) {
       const target = timezone === 'Atlantic/Canary'
-        ? new Date('2027-01-10T00:00:00+00:00')
-        : new Date('2027-01-10T00:00:00+01:00');
+        ? new Date(settings.canary_arrival_at)
+        : new Date(settings.spain_arrival_at);
       apply(target, '🏰 10 · ENE · 2027', 'Fecha ajustada a España · detección por zona horaria.');
       return;
     }
-    apply(new Date('2027-01-12T00:00:00-05:00'), '🏰 12 · ENE · 2027', 'Llegada a Orlando · 12 de enero de 2027.');
+    applyDefault();
   };
 
   if (!navigator.geolocation) {
@@ -361,14 +426,14 @@ function startCountdown() {
       latitude >= south && latitude <= north && longitude >= west && longitude <= east,
     );
     if (!inSpain) {
-      fallback();
+      applyDefault();
       return;
     }
 
     const inCanaryIslands = latitude >= 27.5 && latitude <= 29.6 && longitude >= -18.3 && longitude <= -13.2;
     const target = inCanaryIslands
-      ? new Date('2027-01-10T00:00:00+00:00')
-      : new Date('2027-01-10T00:00:00+01:00');
+      ? new Date(settings.canary_arrival_at)
+      : new Date(settings.spain_arrival_at);
     apply(target, '🏰 10 · ENE · 2027', 'Fecha ajustada a España · detección por ubicación.');
   }, fallback, {
     enableHighAccuracy: false,
