@@ -1,12 +1,6 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/+esm';
+import { supabase, tripApi, systemUserApi } from './api.js';
 
-const SUPABASE_URL = 'https://ezkjmskkfepgeupampdd.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_sm6ncjG2aPyk5mCnDCLFlg_yzW5rczE';
-const TRIP_MEMBER_API = `${SUPABASE_URL}/functions/v1/invite-trip-member`;
-const SYSTEM_USER_API = `${SUPABASE_URL}/functions/v1/manage-system-user`;
 const STRONG_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const $ = (id) => document.getElementById(id);
 
 let currentUser = null;
@@ -26,27 +20,6 @@ function setStatus(element, message = '', type = '') {
   element.textContent = message;
   element.className = `small mt-2 ${type === 'error' ? 'text-danger' : type === 'ok' ? 'text-success' : 'trip-muted'}`;
 }
-
-async function callFunction(url, payload) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('SESSION_EXPIRED');
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    cache: 'no-store',
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || 'No se pudo completar la operación.');
-  return body;
-}
-
-const callTripApi = (payload) => callFunction(TRIP_MEMBER_API, payload);
-const callSystemApi = (payload) => callFunction(SYSTEM_USER_API, payload);
 
 function clearTripUi() {
   clearInterval(countdownTimer);
@@ -80,41 +53,19 @@ function showTripPicker() {
   $('tripGate').setAttribute('aria-hidden', 'false');
 }
 
-async function loadOwnProfile(user) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id,email,display_name,system_access_enabled,is_system_owner,must_change_password')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (error) console.error('Unable to load profile', error);
-  return error ? null : data;
-}
-
-async function loadUserTrips(user) {
-  const { data, error } = await supabase
-    .from('trip_members')
-    .select('trip_id,role_id,is_owner,roles(code,name),trips(id,slug,name,destination,starts_on,ends_on)')
-    .eq('user_id', user.id)
-    .order('created_at');
-  if (error) {
-    console.error('Unable to load trips', error);
-    return null;
-  }
-  return data || [];
-}
-
 function displayName(profile) {
-  return profile?.display_name?.trim() || profile?.email?.split('@')[0] || 'viajero';
+  return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
 }
 
 function renderTripPicker() {
   $('tripGreeting').textContent = `Hola, ${displayName(currentProfile)} 👋`;
-  $('systemOwnerActions').classList.toggle('visible', currentProfile?.is_system_owner === true);
+  $('systemOwnerActions').classList.toggle('visible', currentProfile?.systemOwner === true);
   $('tripList').replaceChildren();
 
   for (const membership of tripMemberships) {
-    const trip = membership.trips;
+    const trip = membership.trip;
     if (!trip) continue;
+
     const col = document.createElement('div');
     col.className = 'col-12 col-md-6';
     const button = document.createElement('button');
@@ -128,7 +79,7 @@ function renderTripPicker() {
     name.textContent = `✈️ ${trip.name}`;
     const badge = document.createElement('span');
     badge.className = 'badge role-badge';
-    badge.textContent = membership.roles?.name || 'Sin rol';
+    badge.textContent = membership.role?.name || 'Sin rol';
     top.append(name, badge);
 
     const destination = document.createElement('div');
@@ -137,6 +88,7 @@ function renderTripPicker() {
     const hint = document.createElement('div');
     hint.className = 'small mt-3';
     hint.textContent = 'Abrir viaje →';
+
     button.append(top, destination, hint);
     button.addEventListener('click', () => openTrip(membership));
     col.append(button);
@@ -152,16 +104,20 @@ function renderTripPicker() {
 
 async function authorize(user) {
   currentUser = user;
-  currentProfile = await loadOwnProfile(user);
-  if (!currentProfile || !currentProfile.system_access_enabled) {
+  try {
+    const bootstrap = await tripApi('bootstrap');
+    currentProfile = bootstrap.profile;
+    tripMemberships = bootstrap.memberships || [];
+  } catch (error) {
     await supabase.auth.signOut();
     currentUser = null;
     currentProfile = null;
-    showLogin('Tu cuenta no tiene acceso habilitado al sistema.', 'error');
+    tripMemberships = [];
+    showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
     return;
   }
 
-  if (currentProfile.must_change_password) {
+  if (currentProfile.mustChangePassword) {
     clearTripUi();
     $('tripGate').classList.remove('visible');
     $('loginFields').classList.add('d-none');
@@ -171,24 +127,8 @@ async function authorize(user) {
     return;
   }
 
-  tripMemberships = await loadUserTrips(user);
-  if (!tripMemberships) {
-    await supabase.auth.signOut();
-    showLogin('No se pudieron cargar tus viajes.', 'error');
-    return;
-  }
   renderTripPicker();
   showTripPicker();
-}
-
-async function getTripSettings(tripId) {
-  const { data, error } = await supabase
-    .from('trip_settings')
-    .select('trip_id,eyebrow,title,subtitle,start_at,default_arrival_at,spain_arrival_at,canary_arrival_at,background_url,photo_credit,default_timezone,spain_timezone,canary_timezone')
-    .eq('trip_id', tripId)
-    .maybeSingle();
-  if (error || !data) console.error('Unable to load trip settings', error);
-  return error ? null : data;
 }
 
 function renderTripShell(settings) {
@@ -218,24 +158,33 @@ function renderTripShell(settings) {
   $('tripEyebrow').textContent = settings.eyebrow;
   $('tripTitle').textContent = settings.title;
   $('tripSubtitle').textContent = settings.subtitle;
-  $('photoCredit').textContent = settings.photo_credit || '';
-  if (settings.background_url) {
+  $('photoCredit').textContent = settings.photoCredit || '';
+
+  if (settings.backgroundUrl) {
     try {
-      const url = new URL(settings.background_url);
+      const url = new URL(settings.backgroundUrl);
       if (url.protocol === 'https:') shell.style.setProperty('--trip-background-image', `url("${url.href}")`);
-    } catch { /* use default */ }
+    } catch {
+      // Keep the CSS fallback image.
+    }
   }
+
   $('openTripDetails').addEventListener('click', () => privateModal.show());
   $('quickChangeTrip').addEventListener('click', changeTrip);
   shell.setAttribute('aria-hidden', 'false');
 }
 
 async function openTrip(membership) {
-  const trip = membership.trips;
+  const trip = membership.trip;
   if (!trip) return;
-  const settings = await getTripSettings(trip.id);
-  if (!settings) {
-    setStatus($('tripGateStatus'), 'No se pudo cargar la configuración del viaje.', 'error');
+
+  setStatus($('tripGateStatus'), 'Cargando viaje…');
+  let settings;
+  try {
+    const result = await tripApi('trip-detail', { tripId: trip.id });
+    settings = result.settings;
+  } catch (error) {
+    setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración del viaje.', 'error');
     return;
   }
 
@@ -246,18 +195,15 @@ async function openTrip(membership) {
   renderTripShell(settings);
   $('tripShell').classList.add('visible');
   $('privateTripTitle').textContent = `✨ ${trip.name}`;
-  $('userLine').textContent = `${currentProfile.email} · ${membership.roles?.name || 'Sin rol'}`;
+  $('userLine').textContent = `${currentProfile.email} · ${membership.role?.name || 'Sin rol'}`;
 
-  const canManage = currentProfile.is_system_owner || membership.roles?.code === 'admin';
+  const canManage = currentProfile.systemOwner || membership.role?.code === 'admin';
   $('adminPanel').classList.toggle('visible', canManage);
   if (canManage) await loadTripAdminData();
   startCountdown(settings);
 }
 
-async function loadRoles() {
-  const { data, error } = await supabase.from('roles').select('id,code,name').order('id');
-  if (error) throw error;
-  roles = data || [];
+function populateTripRoleSelect() {
   const select = $('tripMemberRole');
   select.replaceChildren();
   for (const role of roles) {
@@ -270,31 +216,22 @@ async function loadRoles() {
   if (viewer) select.value = viewer.code;
 }
 
-async function loadTripMembers() {
-  const { data, error } = await supabase
-    .from('trip_members')
-    .select('user_id,role_id,is_owner,roles(code,name),profiles(email,display_name,system_access_enabled)')
-    .eq('trip_id', currentTrip.id)
-    .order('created_at');
-  if (error) {
-    setStatus($('tripMemberStatus'), 'No se pudo cargar la lista de miembros.', 'error');
-    return;
-  }
-
-  $('members').replaceChildren(...(data || []).map((member) => {
+function renderTripMembers(members) {
+  $('members').replaceChildren(...members.map((member) => {
     const row = document.createElement('div');
     row.className = 'member-row p-3 d-flex flex-column flex-md-row gap-2 align-items-md-center';
+
     const info = document.createElement('div');
     info.className = 'me-auto';
     const strong = document.createElement('strong');
-    strong.textContent = member.profiles?.display_name || member.profiles?.email || 'Usuario';
+    strong.textContent = member.profile?.displayName || member.profile?.email || 'Usuario';
     const detail = document.createElement('div');
     detail.className = 'small trip-muted';
-    detail.textContent = `${member.profiles?.email || ''}${member.profiles?.system_access_enabled === false ? ' · Acceso global deshabilitado' : ''}`;
+    detail.textContent = `${member.profile?.email || ''}${member.profile?.enabled === false ? ' · Acceso global deshabilitado' : ''}`;
     info.append(strong, detail);
     row.append(info);
 
-    if (member.is_owner) {
+    if (member.isOwner) {
       const badge = document.createElement('span');
       badge.className = 'badge role-badge';
       badge.textContent = 'Propietario';
@@ -308,18 +245,18 @@ async function loadTripMembers() {
       const option = document.createElement('option');
       option.value = role.code;
       option.textContent = role.name;
-      option.selected = role.id === member.role_id;
+      option.selected = role.id === member.roleId;
       roleSelect.append(option);
     }
     roleSelect.addEventListener('change', async () => {
       roleSelect.disabled = true;
       try {
-        await callTripApi({ action: 'update-role', tripId: currentTrip.id, userId: member.user_id, role: roleSelect.value });
+        await tripApi('update-role', { tripId: currentTrip.id, userId: member.userId, role: roleSelect.value });
         setStatus($('tripMemberStatus'), 'Rol actualizado.', 'ok');
-        await loadTripMembers();
+        await loadTripAdminData();
       } catch (error) {
         setStatus($('tripMemberStatus'), error.message, 'error');
-        await loadTripMembers();
+        roleSelect.disabled = false;
       }
     });
 
@@ -330,7 +267,7 @@ async function loadTripMembers() {
     remove.addEventListener('click', async () => {
       remove.disabled = true;
       try {
-        await callTripApi({ action: 'remove', tripId: currentTrip.id, userId: member.user_id });
+        await tripApi('remove', { tripId: currentTrip.id, userId: member.userId });
         setStatus($('tripMemberStatus'), 'Usuario quitado del viaje.', 'ok');
         await loadTripAdminData();
       } catch (error) {
@@ -338,23 +275,25 @@ async function loadTripMembers() {
         setStatus($('tripMemberStatus'), error.message, 'error');
       }
     });
+
     row.append(roleSelect, remove);
     return row;
   }));
 }
 
-async function loadAvailableUsers() {
-  const result = await callTripApi({ action: 'list-available', tripId: currentTrip.id });
+function renderAvailableUsers(users) {
   const container = $('availableUsersList');
   container.replaceChildren();
-  if (!result.users?.length) {
+
+  if (!users.length) {
     const empty = document.createElement('div');
     empty.className = 'p-3 small trip-muted';
     empty.textContent = 'No hay otros usuarios activos disponibles.';
     container.append(empty);
     return;
   }
-  for (const user of result.users) {
+
+  for (const user of users) {
     const row = document.createElement('div');
     row.className = 'available-user-row';
     const checkbox = document.createElement('input');
@@ -362,6 +301,7 @@ async function loadAvailableUsers() {
     checkbox.className = 'form-check-input mt-0';
     checkbox.value = user.id;
     checkbox.id = `available-${user.id}`;
+
     const label = document.createElement('label');
     label.htmlFor = checkbox.id;
     const name = document.createElement('strong');
@@ -370,6 +310,7 @@ async function loadAvailableUsers() {
     email.className = 'small trip-muted';
     email.textContent = user.email;
     label.append(name, email);
+
     row.append(checkbox, label);
     container.append(row);
   }
@@ -377,8 +318,11 @@ async function loadAvailableUsers() {
 
 async function loadTripAdminData() {
   try {
-    if (!roles.length) await loadRoles();
-    await Promise.all([loadTripMembers(), loadAvailableUsers()]);
+    const result = await tripApi('trip-admin', { tripId: currentTrip.id });
+    roles = result.roles || [];
+    populateTripRoleSelect();
+    renderTripMembers(result.members || []);
+    renderAvailableUsers(result.availableUsers || []);
   } catch (error) {
     setStatus($('tripMemberStatus'), error.message || 'No se pudo cargar la administración.', 'error');
   }
@@ -407,7 +351,7 @@ async function openUserManager() {
   setStatus($('userManagerStatus'), 'Cargando usuarios…');
   userManagerModal.show();
   try {
-    systemData = await callSystemApi({ action: 'list' });
+    systemData = await systemUserApi('list');
     renderSystemUsers();
     clearUserEditor();
     setStatus($('userManagerStatus'));
@@ -416,12 +360,18 @@ async function openUserManager() {
   }
 }
 
+function tripName(tripId) {
+  return systemData.trips?.find((trip) => trip.id === tripId)?.name || 'Viaje';
+}
+
 function renderSystemUsers() {
   const container = $('systemUserList');
   container.replaceChildren();
+
   for (const user of systemData.users || []) {
     const card = document.createElement('div');
     card.className = `user-card p-3 ${user.enabled ? '' : 'disabled-user'}`;
+
     const top = document.createElement('div');
     top.className = 'd-flex gap-2 align-items-start';
     const info = document.createElement('div');
@@ -452,8 +402,8 @@ function renderSystemUsers() {
       toggle.addEventListener('click', async () => {
         toggle.disabled = true;
         try {
-          await callSystemApi({ action: 'toggle-access', userId: user.id, enabled: !user.enabled });
-          systemData = await callSystemApi({ action: 'list' });
+          await systemUserApi('toggle-access', { userId: user.id, enabled: !user.enabled });
+          systemData = await systemUserApi('list');
           renderSystemUsers();
           if (editingUserId === user.id) editSystemUser(user.id);
           setStatus($('userManagerStatus'), user.enabled ? 'Acceso al sistema deshabilitado.' : 'Acceso al sistema habilitado.', 'ok');
@@ -468,15 +418,12 @@ function renderSystemUsers() {
     const assignments = document.createElement('div');
     assignments.className = 'small trip-muted mt-2';
     assignments.textContent = user.memberships?.length
-      ? user.memberships.map((m) => `${tripName(m.tripId)} · ${m.isOwner ? 'Propietario' : m.roleName}`).join(' | ')
+      ? user.memberships.map((membership) => `${tripName(membership.tripId)} · ${membership.isOwner ? 'Propietario' : membership.roleName}`).join(' | ')
       : 'Sin viajes asignados';
+
     card.append(top, assignments);
     container.append(card);
   }
-}
-
-function tripName(tripId) {
-  return systemData.trips?.find((trip) => trip.id === tripId)?.name || 'Viaje';
 }
 
 function roleOptions(select, selected = 'viewer') {
@@ -493,10 +440,12 @@ function roleOptions(select, selected = 'viewer') {
 function renderAssignmentEditor(user = null) {
   const container = $('systemUserAssignments');
   container.replaceChildren();
+
   for (const trip of systemData.trips || []) {
     const existing = user?.memberships?.find((membership) => membership.tripId === trip.id);
     const row = document.createElement('div');
     row.className = 'assignment-row';
+
     const checkWrap = document.createElement('div');
     checkWrap.className = 'form-check';
     const check = document.createElement('input');
@@ -506,6 +455,7 @@ function renderAssignmentEditor(user = null) {
     check.id = `assignment-${trip.id}`;
     check.checked = !!existing;
     if (existing?.isOwner) check.disabled = true;
+
     const label = document.createElement('label');
     label.className = 'form-check-label';
     label.htmlFor = check.id;
@@ -518,6 +468,7 @@ function renderAssignmentEditor(user = null) {
     roleOptions(select, existing?.role || 'viewer');
     select.disabled = !check.checked || existing?.isOwner;
     check.addEventListener('change', () => { select.disabled = !check.checked; });
+
     row.append(checkWrap, select);
     container.append(row);
   }
@@ -538,6 +489,7 @@ function clearUserEditor() {
 function editSystemUser(userId) {
   const user = systemData.users.find((item) => item.id === userId);
   if (!user) return;
+
   editingUserId = userId;
   $('systemUserFormTitle').textContent = 'Editar usuario';
   $('systemUserName').value = user.displayName || '';
@@ -562,12 +514,14 @@ function collectAssignments() {
 }
 
 function startCountdown(settings) {
-  const start = new Date(settings.start_at);
+  const start = new Date(settings.startAt);
   const spainZones = new Set(['Europe/Madrid', 'Atlantic/Canary', 'Africa/Ceuta']);
+
   const apply = (target, label, info) => {
     clearInterval(countdownTimer);
     $('datePill').textContent = label;
     $('targetInfo').textContent = info;
+
     const tick = () => {
       const now = new Date();
       const diff = Math.max(0, target - now);
@@ -580,39 +534,59 @@ function startCountdown(settings) {
       $('progressBar').style.width = `${percent}%`;
       $('progressText').textContent = `${percent.toFixed(1)}%`;
     };
+
     tick();
     countdownTimer = setInterval(tick, 1000);
   };
 
   const useDefault = () => {
-    const target = new Date(settings.default_arrival_at);
-    apply(target, formatArrivalDate(target, settings.default_timezone || 'UTC'), 'Fecha de llegada según el viaje seleccionado.');
+    const target = new Date(settings.defaultArrivalAt);
+    apply(target, formatArrivalDate(target, settings.defaultTimezone || 'UTC'), 'Fecha de llegada según el viaje seleccionado.');
   };
+
   const fallback = () => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (settings.spain_arrival_at && spainZones.has(tz)) {
+    if (settings.spainArrivalAt && spainZones.has(tz)) {
       const canary = tz === 'Atlantic/Canary';
-      const target = new Date(canary && settings.canary_arrival_at ? settings.canary_arrival_at : settings.spain_arrival_at);
-      apply(target, formatArrivalDate(target, canary ? (settings.canary_timezone || 'Atlantic/Canary') : (settings.spain_timezone || 'Europe/Madrid')), 'Fecha ajustada a España · detección por zona horaria.');
+      const target = new Date(canary && settings.canaryArrivalAt ? settings.canaryArrivalAt : settings.spainArrivalAt);
+      apply(
+        target,
+        formatArrivalDate(target, canary ? (settings.canaryTimezone || 'Atlantic/Canary') : (settings.spainTimezone || 'Europe/Madrid')),
+        'Fecha ajustada a España · detección por zona horaria.',
+      );
       return;
     }
     useDefault();
   };
 
-  if (!settings.spain_arrival_at || !navigator.geolocation) return fallback();
+  if (!settings.spainArrivalAt || !navigator.geolocation) return fallback();
+
   navigator.geolocation.getCurrentPosition(({ coords }) => {
     const { latitude, longitude } = coords;
-    const boxes = [[35.7,43.9,-9.6,4.6],[38.5,40.2,1,4.5],[27.5,29.6,-18.3,-13.2],[35.7,36,-5.5,-5.1],[35.1,35.4,-3.1,-2.8]];
-    const inSpain = boxes.some(([s,n,w,e]) => latitude >= s && latitude <= n && longitude >= w && longitude <= e);
+    const boxes = [
+      [35.7, 43.9, -9.6, 4.6],
+      [38.5, 40.2, 1, 4.5],
+      [27.5, 29.6, -18.3, -13.2],
+      [35.7, 36, -5.5, -5.1],
+      [35.1, 35.4, -3.1, -2.8],
+    ];
+    const inSpain = boxes.some(([south, north, west, east]) => latitude >= south && latitude <= north && longitude >= west && longitude <= east);
     if (!inSpain) return useDefault();
+
     const canary = latitude >= 27.5 && latitude <= 29.6 && longitude >= -18.3 && longitude <= -13.2;
-    const target = new Date(canary && settings.canary_arrival_at ? settings.canary_arrival_at : settings.spain_arrival_at);
-    apply(target, formatArrivalDate(target, canary ? (settings.canary_timezone || 'Atlantic/Canary') : (settings.spain_timezone || 'Europe/Madrid')), 'Fecha ajustada a España · detección por ubicación.');
+    const target = new Date(canary && settings.canaryArrivalAt ? settings.canaryArrivalAt : settings.spainArrivalAt);
+    apply(
+      target,
+      formatArrivalDate(target, canary ? (settings.canaryTimezone || 'Atlantic/Canary') : (settings.spainTimezone || 'Europe/Madrid')),
+      'Fecha ajustada a España · detección por ubicación.',
+    );
   }, fallback, { enableHighAccuracy: false, timeout: 8000, maximumAge: 3600000 });
 }
 
 function formatArrivalDate(date, timeZone) {
-  const parts = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric', timeZone }).formatToParts(date);
+  const parts = new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone,
+  }).formatToParts(date);
   const value = (type) => parts.find((part) => part.type === type)?.value || '';
   return `🏰 ${value('day')} · ${value('month').replace('.', '').toUpperCase()} · ${value('year')}`;
 }
@@ -633,9 +607,10 @@ $('changePasswordForm').addEventListener('submit', async (event) => {
   const password = $('newPassword').value;
   if (password !== $('confirmPassword').value) return setStatus($('authStatus'), 'Las contraseñas no coinciden.', 'error');
   if (!STRONG_PASSWORD_RE.test(password)) return setStatus($('authStatus'), 'Usá al menos 8 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
+
   setStatus($('authStatus'), 'Actualizando contraseña…');
   try {
-    await callSystemApi({ action: 'complete-password', password });
+    await systemUserApi('complete-password', { password });
     await supabase.auth.signOut();
     $('changePasswordForm').reset();
     $('loginForm').reset();
@@ -651,11 +626,14 @@ $('tripMemberForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const selected = [...$('availableUsersList').querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
   if (!selected.length) return setStatus($('tripMemberStatus'), 'Seleccioná al menos un usuario.', 'error');
+
   setStatus($('tripMemberStatus'), 'Agregando usuarios…');
   try {
-    for (const userId of selected) {
-      await callTripApi({ action: 'assign', tripId: currentTrip.id, userId, role: $('tripMemberRole').value });
-    }
+    await Promise.all(selected.map((userId) => tripApi('assign', {
+      tripId: currentTrip.id,
+      userId,
+      role: $('tripMemberRole').value,
+    })));
     setStatus($('tripMemberStatus'), 'Usuarios agregados al viaje.', 'ok');
     await loadTripAdminData();
   } catch (error) {
@@ -669,18 +647,30 @@ $('systemUserForm').addEventListener('submit', async (event) => {
   const emailValue = $('systemUserEmail').value.trim().toLowerCase();
   const assignments = collectAssignments();
   setStatus($('systemUserFormStatus'), 'Guardando…');
+
   try {
     if (editingUserId) {
-      await callSystemApi({
-        action: 'update', userId: editingUserId, displayName: displayNameValue, email: emailValue,
-        enabled: $('systemUserEnabled').checked, assignments,
+      await systemUserApi('update', {
+        userId: editingUserId,
+        displayName: displayNameValue,
+        email: emailValue,
+        enabled: $('systemUserEnabled').checked,
+        assignments,
       });
     } else {
       const temporaryPassword = $('systemUserPassword').value;
-      if (!STRONG_PASSWORD_RE.test(temporaryPassword)) throw new Error('La contraseña temporal debe tener al menos 8 caracteres con mayúscula, minúscula, número y símbolo.');
-      await callSystemApi({ action: 'create', displayName: displayNameValue, email: emailValue, temporaryPassword, assignments });
+      if (!STRONG_PASSWORD_RE.test(temporaryPassword)) {
+        throw new Error('La contraseña temporal debe tener al menos 8 caracteres con mayúscula, minúscula, número y símbolo.');
+      }
+      await systemUserApi('create', {
+        displayName: displayNameValue,
+        email: emailValue,
+        temporaryPassword,
+        assignments,
+      });
     }
-    systemData = await callSystemApi({ action: 'list' });
+
+    systemData = await systemUserApi('list');
     renderSystemUsers();
     clearUserEditor();
     setStatus($('userManagerStatus'), 'Usuario guardado.', 'ok');
