@@ -180,16 +180,18 @@ async function openTrip(membership) {
 
   setStatus($('tripGateStatus'), 'Cargando viaje…');
   let settings;
+  let permissions = membership.permissions || [];
   try {
     const result = await tripApi('trip-detail', { tripId: trip.id });
     settings = result.settings;
+    permissions = result.permissions || permissions;
   } catch (error) {
     setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración del viaje.', 'error');
     return;
   }
 
   currentTrip = trip;
-  currentMembership = membership;
+  currentMembership = { ...membership, permissions };
   $('authGate').classList.add('hidden');
   $('tripGate').classList.remove('visible');
   renderTripShell(settings);
@@ -197,9 +199,9 @@ async function openTrip(membership) {
   $('privateTripTitle').textContent = `✨ ${trip.name}`;
   $('userLine').textContent = `${currentProfile.email} · ${membership.role?.name || 'Sin rol'}`;
 
-  const canManage = currentProfile.systemOwner || membership.role?.code === 'admin';
-  $('adminPanel').classList.toggle('visible', canManage);
-  if (canManage) await loadTripAdminData();
+  const canManageMembers = permissions.includes('members.manage');
+  $('adminPanel').classList.toggle('visible', canManageMembers);
+  if (canManageMembers) await loadTripAdminData();
   startCountdown(settings);
 }
 
