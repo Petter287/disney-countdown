@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07152f">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; img-src 'self' data: https://upload.wikimedia.org; connect-src 'self' https://ezkjmskkfepgeupampdd.supabase.co wss://ezkjmskkfepgeupampdd.supabase.co; font-src 'self' data:; media-src 'none'; worker-src 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; frame-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; img-src 'self' data: https://upload.wikimedia.org; connect-src 'self' https://cdn.jsdelivr.net https://ezkjmskkfepgeupampdd.supabase.co wss://ezkjmskkfepgeupampdd.supabase.co; font-src 'self' data:; media-src 'none'; worker-src 'none';">
   <script src="assets/js/frame-guard.js"></script>
   <title>Mi viaje ✨</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
@@ -14,40 +14,66 @@
 <body>
   <div id="authGate" class="auth-gate">
     <section class="glass-panel auth-card p-4 p-md-5">
-      <div class="text-center mb-4"><div class="fs-1">🏰</div><h1 class="h3 fw-bold mt-2">Acceso al viaje</h1><p class="trip-muted mb-0">Solo pueden ingresar personas dadas de alta por un administrador.</p></div>
-      <form id="loginForm">
+      <div class="text-center mb-4">
+        <div class="fs-1">🏰</div>
+        <h1 class="h3 fw-bold mt-2">Acceso al viaje</h1>
+        <p class="trip-muted mb-0">Solo pueden ingresar personas dadas de alta por un administrador.</p>
+      </div>
+      <form id="loginForm" autocomplete="off">
         <div id="loginFields">
-          <div class="mb-3"><label for="email" class="form-label">Email</label><input id="email" class="form-control" type="email" required autocomplete="email" maxlength="254"></div>
-          <div class="mb-3"><label for="password" class="form-label">Contraseña</label><input id="password" class="form-control" type="password" required autocomplete="current-password"></div>
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input id="email" name="trip-login-email" class="form-control" type="email" required autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="254" data-lpignore="true" data-1p-ignore>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Contraseña</label>
+            <input id="password" name="trip-login-password" class="form-control" type="password" required autocomplete="current-password">
+          </div>
           <button class="btn btn-trip w-100" type="submit">Iniciar sesión</button>
         </div>
         <div id="authStatus" class="small mt-2 trip-muted" aria-live="polite"></div>
       </form>
       <form id="changePasswordForm" class="password-gate">
-        <h2 class="h5 fw-bold">Crear contraseña personal</h2><p class="trip-muted small">Estás usando una contraseña temporal. Cambiala para continuar. Debe tener al menos 12 caracteres, mayúscula, minúscula, número y símbolo.</p>
-        <div class="mb-3"><label for="newPassword" class="form-label">Nueva contraseña</label><input id="newPassword" class="form-control" type="password" minlength="12" required autocomplete="new-password"></div>
-        <div class="mb-3"><label for="confirmPassword" class="form-label">Repetir contraseña</label><input id="confirmPassword" class="form-control" type="password" minlength="12" required autocomplete="new-password"></div>
+        <h2 class="h5 fw-bold">Crear contraseña personal</h2>
+        <p class="trip-muted small">Estás usando una contraseña temporal. Cambiala para continuar. Debe tener al menos 8 caracteres, mayúscula, minúscula, número y símbolo.</p>
+        <div class="mb-3"><label for="newPassword" class="form-label">Nueva contraseña</label><input id="newPassword" class="form-control" type="password" minlength="8" required autocomplete="new-password"></div>
+        <div class="mb-3"><label for="confirmPassword" class="form-label">Repetir contraseña</label><input id="confirmPassword" class="form-control" type="password" minlength="8" required autocomplete="new-password"></div>
         <button class="btn btn-trip w-100" type="submit">Guardar y continuar</button>
       </form>
     </section>
   </div>
 
-  <div id="tripShell" class="trip-shell">
-    <button id="openTrip" class="btn btn-dark position-fixed top-0 end-0 m-3 rounded-pill z-3" type="button">✨ Mi viaje</button>
-    <main class="container min-vh-100 d-flex align-items-center justify-content-center py-3">
-      <section class="countdown-card w-100 p-4 text-center">
-        <div class="eyebrow mb-2">✦ Próxima parada: Orlando ✦</div><h1 class="trip-title fw-bold mb-2">La magia está cada vez más cerca</h1><p class="trip-muted mb-3">Cuenta regresiva para nuestro viaje. Cada segundo que pasa falta un poquito menos para estar ahí.</p><span id="datePill" class="badge rounded-pill date-pill px-3 py-2">🏰 12 · ENE · 2027</span>
-        <div class="row g-2 my-3"><div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="days" class="count-number">000</div><div class="count-label">Días</div></div></div><div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="hours" class="count-number">00</div><div class="count-label">Horas</div></div></div><div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="minutes" class="count-number">00</div><div class="count-label">Minutos</div></div></div><div class="col-6 col-md-3"><div class="count-unit d-flex flex-column justify-content-center"><div id="seconds" class="count-number">00</div><div class="count-label">Segundos</div></div></div></div>
-        <div class="d-flex justify-content-between small trip-muted mb-2"><span>Cuenta regresiva iniciada</span><span id="progressText">Calculando…</span></div><div class="progress rounded-pill"><div id="progressBar" class="progress-bar"></div></div><p id="targetInfo" class="small trip-muted mt-3 mb-1">Calculando fecha…</p><p class="photo-credit mb-0">Foto del castillo: Gsink / Wikimedia Commons · CC0</p>
-      </section>
-    </main>
-  </div>
+  <!-- El contenido real del viaje se crea recién después de autorización y de leer trip_settings por RLS. -->
+  <div id="tripShell" class="trip-shell" aria-hidden="true"></div>
 
-  <div class="modal fade" id="privateModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl"><div class="modal-content glass-panel text-white"><div class="modal-header border-secondary"><div><h2 class="modal-title h4 fw-bold">✨ Nuestro viaje 2027</h2><div id="userLine" class="small trip-muted"></div></div><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button></div><div class="modal-body p-4">
-    <p class="trip-muted">Área privada del viaje. Tu nivel de acceso está controlado por permisos en Supabase.</p>
-    <div class="row g-3"><div class="col-md-6"><div class="private-tile p-3"><strong>✈️ Vuelos</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏨 Hoteles</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏰 Disney</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🎢 Universal</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🍽️ Reservas</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🗓️ Itinerario</strong><div class="small trip-muted">Próximamente</div></div></div></div>
-    <section id="adminPanel" class="admin-panel border-top border-secondary mt-4 pt-4"><h3 class="h5 fw-bold">👥 Administración de acceso</h3><p class="trip-muted small">Agregá una persona y asignale un rol. Si el email todavía no tiene cuenta, definí una contraseña temporal fuerte y compartila por un medio seguro.</p><form id="memberForm" class="row g-3 align-items-end"><div class="col-lg-4"><label for="memberEmail" class="form-label">Email</label><input id="memberEmail" class="form-control" type="email" required maxlength="254" placeholder="persona@email.com" autocomplete="off"></div><div class="col-lg-3"><label for="memberRole" class="form-label">Rol</label><select id="memberRole" class="form-select" required></select></div><div class="col-lg-3"><label for="temporaryPassword" class="form-label">Contraseña temporal</label><input id="temporaryPassword" class="form-control" type="password" minlength="12" autocomplete="new-password" aria-describedby="temporaryPasswordHelp"><div id="temporaryPasswordHelp" class="form-text text-light opacity-75">Solo se usa si el email no tiene una cuenta previa.</div></div><div class="col-lg-2 d-grid"><button class="btn btn-trip" type="submit">Agregar acceso</button></div></form><div id="memberStatus" class="small mt-2 trip-muted" aria-live="polite"></div><div id="members" class="d-grid gap-2 mt-3"></div></section>
-  </div><div class="modal-footer border-secondary"><button id="logoutButton" class="btn btn-outline-light w-100" type="button">Cerrar sesión</button></div></div></div></div>
+  <div class="modal fade" id="privateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+      <div class="modal-content glass-panel text-white">
+        <div class="modal-header border-secondary">
+          <div><h2 class="modal-title h4 fw-bold">✨ Nuestro viaje 2027</h2><div id="userLine" class="small trip-muted"></div></div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="trip-muted">Área privada del viaje. Tu nivel de acceso está controlado por permisos en Supabase.</p>
+          <div class="row g-3"><div class="col-md-6"><div class="private-tile p-3"><strong>✈️ Vuelos</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏨 Hoteles</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏰 Disney</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🎢 Universal</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🍽️ Reservas</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🗓️ Itinerario</strong><div class="small trip-muted">Próximamente</div></div></div></div>
+          <section id="adminPanel" class="admin-panel border-top border-secondary mt-4 pt-4">
+            <h3 class="h5 fw-bold">👥 Administración de acceso</h3>
+            <p class="trip-muted small">Agregá una persona y asignale un rol. Si el email todavía no tiene cuenta, definí una contraseña temporal fuerte y compartila por un medio seguro.</p>
+            <form id="memberForm" class="row g-3 align-items-end" autocomplete="off">
+              <div class="col-lg-4"><label for="memberEmail" class="form-label">Email</label><input id="memberEmail" class="form-control" type="email" required maxlength="254" placeholder="persona@email.com" autocomplete="off" autocapitalize="none" spellcheck="false" data-lpignore="true" data-1p-ignore></div>
+              <div class="col-lg-3"><label for="memberRole" class="form-label">Rol</label><select id="memberRole" class="form-select" required></select></div>
+              <div class="col-lg-3"><label for="temporaryPassword" class="form-label">Contraseña temporal</label><input id="temporaryPassword" class="form-control" type="password" minlength="8" autocomplete="new-password" aria-describedby="temporaryPasswordHelp"></div>
+              <div class="col-lg-2 d-grid"><button class="btn btn-trip" type="submit">Agregar acceso</button></div>
+              <div class="col-12"><div id="temporaryPasswordHelp" class="form-text text-light opacity-75 mt-0">La contraseña temporal solo se usa si el email todavía no tiene una cuenta previa.</div></div>
+            </form>
+            <div id="memberStatus" class="small mt-2 trip-muted" aria-live="polite"></div>
+            <div id="members" class="d-grid gap-2 mt-3"></div>
+          </section>
+        </div>
+        <div class="modal-footer border-secondary"><button id="logoutButton" class="btn btn-outline-light w-100" type="button">Cerrar sesión</button></div>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
   <script type="module" src="assets/js/app.js"></script>
