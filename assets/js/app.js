@@ -230,7 +230,17 @@ async function applyRoute(route) {
       navigate('/', { replace: true });
       return;
     }
-    showTripManager(access.trip);
+
+    try {
+      const managementData = await tripApi('trip-manage-detail', { slug: access.trip.slug });
+      showTripManager(managementData);
+    } catch (error) {
+      if (error.message === 'SESSION_EXPIRED') return;
+      navigate('/', { replace: true });
+      refreshTripPicker();
+      showTripPicker();
+      setStatus($('tripGateStatus'), error.message || 'No se pudo cargar el viaje para editar.', 'error');
+    }
     return;
   }
 
