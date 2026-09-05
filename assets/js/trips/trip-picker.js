@@ -36,7 +36,11 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTri
 
     const destination = document.createElement('div');
     destination.className = 'trip-muted';
-    destination.textContent = formatDestination(trip.destination, trip.countryCode || trip.country_code);
+    destination.textContent = formatDestination(
+      trip.destination,
+      trip.countryCode || trip.country_code,
+      trip.regionCode || trip.region_code,
+    );
     const hint = document.createElement('div');
     hint.className = 'small mt-3';
     hint.textContent = 'Abrir viaje →';
