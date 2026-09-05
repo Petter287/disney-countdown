@@ -1,7 +1,7 @@
 import { supabase, systemUserApi } from '../api.js';
 import { STRONG_PASSWORD_RE } from '../shared/constants.js';
 import { $, setStatus } from '../shared/dom.js';
-import { state } from '../state.js';
+import { purgePrivateSessionData } from '../shared/session-security.js';
 
 export function bindAuth({ authorize, showLogin }) {
   $('loginForm').addEventListener('submit', async (event) => {
@@ -25,10 +25,7 @@ export function bindAuth({ authorize, showLogin }) {
     try {
       await systemUserApi('complete-password', { password });
       await supabase.auth.signOut();
-      $('changePasswordForm').reset();
-      $('loginForm').reset();
-      state.currentUser = null;
-      state.currentProfile = null;
+      purgePrivateSessionData();
       showLogin('Contraseña actualizada. Iniciá sesión nuevamente.', 'ok');
     } catch (error) {
       setStatus($('authStatus'), error.message, 'error');
