@@ -1,10 +1,11 @@
 import { $, setStatus } from '../shared/dom.js';
+import { formatDestination } from '../shared/geography.js';
 
 function displayName(profile) {
   return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
 }
 
-export function renderTripPicker(profile, accessibleTrips, onOpenTrip) {
+export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTrip) {
   $('tripGreeting').textContent = `Hola, ${displayName(profile)} 👋`;
   $('systemOwnerActions').classList.toggle('visible', profile?.systemOwner === true);
   $('tripList').replaceChildren();
@@ -15,6 +16,10 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip) {
 
     const col = document.createElement('div');
     col.className = 'col-12 col-md-6';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'd-grid gap-2';
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'trip-card w-100 text-start p-4';
@@ -31,14 +36,29 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip) {
 
     const destination = document.createElement('div');
     destination.className = 'trip-muted';
-    destination.textContent = trip.destination || '';
+    destination.textContent = formatDestination(
+      trip.destination,
+      trip.countryCode || trip.country_code,
+      trip.regionCode || trip.region_code,
+    );
     const hint = document.createElement('div');
     hint.className = 'small mt-3';
     hint.textContent = 'Abrir viaje →';
 
     button.append(top, destination, hint);
     button.addEventListener('click', () => onOpenTrip(access));
-    col.append(button);
+    wrapper.append(button);
+
+    if (profile?.systemOwner && onEditTrip) {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'btn btn-outline-light btn-sm';
+      edit.textContent = '✏️ Editar viaje';
+      edit.addEventListener('click', () => onEditTrip(access));
+      wrapper.append(edit);
+    }
+
+    col.append(wrapper);
     $('tripList').append(col);
   }
 

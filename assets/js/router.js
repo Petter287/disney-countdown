@@ -9,6 +9,16 @@ export function currentRoute() {
 
   if (path === '/') return { name: 'trips', path };
   if (path === '/users') return { name: 'users', path };
+  if (path === '/trips/new') return { name: 'trip-new', path };
+
+  const editMatch = path.match(/^\/trips\/([^/]+)\/edit$/);
+  if (editMatch) {
+    try {
+      return { name: 'trip-edit', path, slug: decodeURIComponent(editMatch[1]) };
+    } catch {
+      return { name: 'not-found', path };
+    }
+  }
 
   const tripMatch = path.match(/^\/trips\/([^/]+)$/);
   if (tripMatch) {
@@ -24,6 +34,10 @@ export function currentRoute() {
 
 export function tripPath(slug) {
   return `/trips/${encodeURIComponent(slug)}`;
+}
+
+export function tripEditPath(slug) {
+  return `/trips/${encodeURIComponent(slug)}/edit`;
 }
 
 export function navigate(path, { replace = false } = {}) {

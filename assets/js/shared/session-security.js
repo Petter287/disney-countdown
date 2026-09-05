@@ -38,6 +38,7 @@ export function purgePrivateSessionData() {
   clearChildren('tripMemberRole');
   clearChildren('systemUserList');
   clearChildren('systemUserAssignments');
+  clearChildren('tripCrudBackgroundPreview');
 
   clearText('tripGreeting');
   clearText('privateTripTitle');
@@ -46,12 +47,19 @@ export function purgePrivateSessionData() {
   clearText('tripMemberStatus');
   clearText('userManagerStatus');
   clearText('systemUserFormStatus');
+  clearText('tripCrudStatus');
   clearText('authStatus');
 
   const tripShell = $('tripShell');
   tripShell?.classList.remove('visible');
   tripShell?.setAttribute('aria-hidden', 'true');
   tripShell?.style.removeProperty('--trip-background-image');
+
+  const tripManagerGate = $('tripManagerGate');
+  tripManagerGate?.classList.remove('visible');
+  tripManagerGate?.setAttribute('aria-hidden', 'true');
+  $('tripCrudBackgroundPreview')?.classList.add('d-none');
+  $('tripCrudRemoveBackgroundGroup')?.classList.add('d-none');
 
   $('adminPanel')?.classList.remove('visible');
   $('systemOwnerActions')?.classList.remove('visible');
@@ -60,6 +68,7 @@ export function purgePrivateSessionData() {
   resetForm('changePasswordForm');
   resetForm('tripMemberForm');
   resetForm('systemUserForm');
+  resetForm('tripCrudForm');
 
   const userFormTitle = $('systemUserFormTitle');
   if (userFormTitle) userFormTitle.textContent = 'Agregar usuario';
