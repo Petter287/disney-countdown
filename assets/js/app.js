@@ -1,4 +1,4 @@
-import { supabase, tripApi } from './api.js';
+import { secureSignOut, supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
 import { bindRouter, currentRoute, navigate, tripPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
@@ -64,7 +64,7 @@ async function handleExpiredSession() {
   showLogin('Tu sesión venció. Iniciá sesión nuevamente.', 'error');
 
   try {
-    await supabase.auth.signOut();
+    await secureSignOut();
   } catch {
     // The private UI and application state are already purged locally.
   } finally {
@@ -81,7 +81,7 @@ async function authorize(user) {
   } catch (error) {
     if (error.message === 'SESSION_EXPIRED') return;
     try {
-      await supabase.auth.signOut();
+      await secureSignOut();
     } finally {
       purgePrivateSessionData();
       showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
@@ -193,7 +193,7 @@ async function logout() {
   if (state.userManagerModal) state.userManagerModal.hide();
 
   try {
-    await supabase.auth.signOut();
+    await secureSignOut();
   } finally {
     purgePrivateSessionData();
     navigate('/', { replace: true });
