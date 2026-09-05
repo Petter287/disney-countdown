@@ -2,6 +2,7 @@ import { supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
 import { bindRouter, currentRoute, navigate, tripPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
+import { purgePrivateSessionData } from './shared/session-security.js';
 import { state } from './state.js';
 import { startCountdown, stopCountdown } from './trips/countdown.js';
 import { bindTripAdminForm, loadTripAdminData } from './trips/trip-admin.js';
@@ -57,11 +58,12 @@ async function authorize(user) {
     state.currentProfile = bootstrap.profile;
     state.tripMemberships = bootstrap.memberships || [];
   } catch (error) {
-    await supabase.auth.signOut();
-    state.currentUser = null;
-    state.currentProfile = null;
-    state.tripMemberships = [];
-    showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      purgePrivateSessionData();
+      showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
+    }
     return;
   }
 
@@ -166,15 +168,14 @@ async function applyRoute(route) {
 async function logout() {
   if (state.privateModal) state.privateModal.hide();
   if (state.userManagerModal) state.userManagerModal.hide();
-  clearTripUi();
-  await supabase.auth.signOut();
-  state.currentUser = null;
-  state.currentProfile = null;
-  state.tripMemberships = [];
-  $('loginForm').reset();
-  $('changePasswordForm').reset();
-  navigate('/', { replace: true });
-  showLogin();
+
+  try {
+    await supabase.auth.signOut();
+  } finally {
+    purgePrivateSessionData();
+    navigate('/', { replace: true });
+    showLogin();
+  }
 }
 
 function bindNavigation() {
@@ -198,5 +199,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user) await authorize(session.user);
-  else showLogin();
+  else {
+    purgePrivateSessionData();
+    showLogin();
+  }
 });
