@@ -110,7 +110,7 @@ async function openTrip(membership) {
   let settings;
   let permissions = membership.permissions || [];
   try {
-    const result = await tripApi('trip-detail', { tripId: trip.id });
+    const result = await tripApi('trip-detail', { slug: trip.slug });
     settings = result.settings;
     permissions = result.permissions || permissions;
   } catch (error) {
