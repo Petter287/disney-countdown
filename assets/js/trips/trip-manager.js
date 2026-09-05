@@ -5,6 +5,68 @@ let activeTrip = null;
 let onSaved = null;
 let onDeleted = null;
 let onCancel = null;
+let onNew = null;
+
+function ensureUi() {
+  if (!$('newTripButton')) {
+    const button = document.createElement('button');
+    button.id = 'newTripButton';
+    button.type = 'button';
+    button.className = 'btn btn-outline-info btn-sm me-2';
+    button.textContent = '+ Nuevo viaje';
+    $('systemOwnerActions')?.prepend(button);
+  }
+
+  if ($('tripManagerGate')) return;
+
+  const gate = document.createElement('div');
+  gate.id = 'tripManagerGate';
+  gate.className = 'trip-gate';
+  gate.setAttribute('aria-hidden', 'true');
+  gate.innerHTML = `
+    <section class="glass-panel trip-picker p-4 p-md-5">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+        <div>
+          <div class="fs-2">🧳</div>
+          <h1 id="tripCrudTitle" class="h3 fw-bold mb-1">Nuevo viaje</h1>
+          <p id="tripCrudIntro" class="trip-muted mb-0"></p>
+        </div>
+        <button id="tripCrudCancel" type="button" class="btn btn-outline-light btn-sm">Volver</button>
+      </div>
+      <form id="tripCrudForm" autocomplete="off">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="tripCrudName" class="form-label">Nombre</label>
+            <input id="tripCrudName" class="form-control" maxlength="120" required>
+          </div>
+          <div class="col-md-6">
+            <label for="tripCrudSlug" class="form-label">Slug</label>
+            <input id="tripCrudSlug" class="form-control" maxlength="120" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required>
+            <div class="form-text text-light opacity-75">Ejemplo: orlando-2027</div>
+          </div>
+          <div class="col-12">
+            <label for="tripCrudDestination" class="form-label">Destino</label>
+            <input id="tripCrudDestination" class="form-control" maxlength="160" required>
+          </div>
+          <div class="col-md-6">
+            <label for="tripCrudStartsOn" class="form-label">Fecha de inicio</label>
+            <input id="tripCrudStartsOn" class="form-control" type="date" required>
+          </div>
+          <div class="col-md-6">
+            <label for="tripCrudEndsOn" class="form-label">Fecha de fin</label>
+            <input id="tripCrudEndsOn" class="form-control" type="date">
+          </div>
+        </div>
+        <div id="tripCrudStatus" class="small mt-3 trip-muted" aria-live="polite"></div>
+        <div class="d-flex flex-column flex-sm-row gap-2 mt-4">
+          <button id="tripCrudSave" class="btn btn-trip flex-fill" type="submit">Guardar viaje</button>
+          <button id="tripCrudDelete" class="btn btn-outline-danger flex-fill d-none" type="button">Eliminar viaje</button>
+        </div>
+      </form>
+    </section>`;
+
+  document.body.insertBefore(gate, $('tripShell'));
+}
 
 function normalizeSlug(value) {
   return value.trim().toLowerCase();
@@ -17,11 +79,14 @@ function setBusy(isBusy) {
 }
 
 export function hideTripManager() {
-  $('tripManagerGate').classList.remove('visible');
-  $('tripManagerGate').setAttribute('aria-hidden', 'true');
+  const gate = $('tripManagerGate');
+  if (!gate) return;
+  gate.classList.remove('visible');
+  gate.setAttribute('aria-hidden', 'true');
 }
 
 export function showTripManager(trip = null) {
+  ensureUi();
   activeTrip = trip;
   const editing = Boolean(trip);
 
@@ -44,10 +109,13 @@ export function showTripManager(trip = null) {
 }
 
 export function bindTripManager(callbacks = {}) {
+  ensureUi();
   onSaved = callbacks.onSaved || null;
   onDeleted = callbacks.onDeleted || null;
   onCancel = callbacks.onCancel || null;
+  onNew = callbacks.onNew || null;
 
+  $('newTripButton').addEventListener('click', () => onNew?.());
   $('tripCrudCancel').addEventListener('click', () => onCancel?.());
 
   $('tripCrudForm').addEventListener('submit', async (event) => {
