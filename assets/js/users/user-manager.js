@@ -169,8 +169,8 @@ export async function openUserManager() {
   }
 }
 
-export function bindUserManager() {
-  $('manageUsersButton').addEventListener('click', openUserManager);
+export function bindUserManager({ onOpen = openUserManager } = {}) {
+  $('manageUsersButton').addEventListener('click', onOpen);
   $('newSystemUserButton').addEventListener('click', clearUserEditor);
   $('cancelSystemUserEdit').addEventListener('click', clearUserEditor);
 

@@ -1,12 +1,13 @@
 import { supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
+import { bindRouter, currentRoute, navigate, tripPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
 import { state } from './state.js';
 import { startCountdown, stopCountdown } from './trips/countdown.js';
 import { bindTripAdminForm, loadTripAdminData } from './trips/trip-admin.js';
 import { renderTripPicker } from './trips/trip-picker.js';
 import { renderTripShell } from './trips/trip-view.js';
-import { bindUserManager } from './users/user-manager.js';
+import { bindUserManager, openUserManager } from './users/user-manager.js';
 
 function clearTripUi() {
   stopCountdown();
@@ -39,8 +40,14 @@ function showTripPicker() {
   $('tripGate').setAttribute('aria-hidden', 'false');
 }
 
+function openTripRoute(membership) {
+  const slug = membership?.trip?.slug;
+  if (!slug) return;
+  navigate(tripPath(slug));
+}
+
 function refreshTripPicker() {
-  renderTripPicker(state.currentProfile, state.tripMemberships, openTrip);
+  renderTripPicker(state.currentProfile, state.tripMemberships, openTripRoute);
 }
 
 async function authorize(user) {
@@ -68,8 +75,7 @@ async function authorize(user) {
     return;
   }
 
-  refreshTripPicker();
-  showTripPicker();
+  await applyRoute(currentRoute());
 }
 
 async function openTrip(membership) {
@@ -84,6 +90,8 @@ async function openTrip(membership) {
     settings = result.settings;
     permissions = result.permissions || permissions;
   } catch (error) {
+    showTripPicker();
+    refreshTripPicker();
     setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración del viaje.', 'error');
     return;
   }
@@ -108,6 +116,49 @@ async function openTrip(membership) {
 
 function changeTrip() {
   if (state.privateModal) state.privateModal.hide();
+  if (!navigate('/')) {
+    refreshTripPicker();
+    showTripPicker();
+  }
+}
+
+async function applyRoute(route) {
+  if (!state.currentProfile) return;
+
+  if (route.name === 'not-found') {
+    navigate('/', { replace: true });
+    return;
+  }
+
+  if (route.name === 'users') {
+    if (!state.currentProfile.systemOwner) {
+      navigate('/', { replace: true });
+      return;
+    }
+
+    if (state.privateModal) state.privateModal.hide();
+    refreshTripPicker();
+    showTripPicker();
+    await openUserManager();
+    return;
+  }
+
+  if (state.userManagerModal) state.userManagerModal.hide();
+
+  if (route.name === 'trip') {
+    const membership = state.tripMemberships.find((item) => item.trip?.slug === route.slug);
+    if (!membership) {
+      refreshTripPicker();
+      showTripPicker();
+      setStatus($('tripGateStatus'), 'No tenés acceso al viaje solicitado.', 'error');
+      return;
+    }
+
+    await openTrip(membership);
+    return;
+  }
+
+  if (state.privateModal) state.privateModal.hide();
   refreshTripPicker();
   showTripPicker();
 }
@@ -122,6 +173,7 @@ async function logout() {
   state.tripMemberships = [];
   $('loginForm').reset();
   $('changePasswordForm').reset();
+  navigate('/', { replace: true });
   showLogin();
 }
 
@@ -129,15 +181,19 @@ function bindNavigation() {
   $('changeTripButton').addEventListener('click', changeTrip);
   $('logoutButton').addEventListener('click', logout);
   $('tripGateLogout').addEventListener('click', logout);
+  $('userManagerModal').addEventListener('hidden.bs.modal', () => {
+    if (currentRoute().name === 'users') navigate('/');
+  });
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
   state.privateModal = new bootstrap.Modal($('privateModal'));
   state.userManagerModal = new bootstrap.Modal($('userManagerModal'));
 
+  bindRouter(applyRoute);
   bindAuth({ authorize, showLogin });
   bindTripAdminForm();
-  bindUserManager();
+  bindUserManager({ onOpen: () => navigate('/users') });
   bindNavigation();
 
   const { data: { session } } = await supabase.auth.getSession();
