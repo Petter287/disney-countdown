@@ -4,13 +4,13 @@ function displayName(profile) {
   return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
 }
 
-export function renderTripPicker(profile, memberships, onOpenTrip) {
+export function renderTripPicker(profile, accessibleTrips, onOpenTrip) {
   $('tripGreeting').textContent = `Hola, ${displayName(profile)} 👋`;
   $('systemOwnerActions').classList.toggle('visible', profile?.systemOwner === true);
   $('tripList').replaceChildren();
 
-  for (const membership of memberships) {
-    const trip = membership.trip;
+  for (const access of accessibleTrips) {
+    const trip = access.trip;
     if (!trip) continue;
 
     const col = document.createElement('div');
@@ -26,7 +26,7 @@ export function renderTripPicker(profile, memberships, onOpenTrip) {
     name.textContent = `✈️ ${trip.name}`;
     const badge = document.createElement('span');
     badge.className = 'badge role-badge';
-    badge.textContent = membership.role?.name || 'Sin rol';
+    badge.textContent = access.membership?.role?.name || (profile?.systemOwner ? 'System Owner' : 'Sin rol');
     top.append(name, badge);
 
     const destination = document.createElement('div');
@@ -37,14 +37,14 @@ export function renderTripPicker(profile, memberships, onOpenTrip) {
     hint.textContent = 'Abrir viaje →';
 
     button.append(top, destination, hint);
-    button.addEventListener('click', () => onOpenTrip(membership));
+    button.addEventListener('click', () => onOpenTrip(access));
     col.append(button);
     $('tripList').append(col);
   }
 
   setStatus(
     $('tripGateStatus'),
-    memberships.length ? '' : 'No tenés viajes asignados.',
-    memberships.length ? '' : 'error',
+    accessibleTrips.length ? '' : 'No tenés viajes disponibles.',
+    accessibleTrips.length ? '' : 'error',
   );
 }
