@@ -1,4 +1,4 @@
-import { supabase, systemUserApi } from '../api.js';
+import { secureSignOut, supabase, systemUserApi } from '../api.js';
 import { STRONG_PASSWORD_RE } from '../shared/constants.js';
 import { $, setStatus } from '../shared/dom.js';
 import { purgePrivateSessionData } from '../shared/session-security.js';
@@ -24,11 +24,20 @@ export function bindAuth({ authorize, showLogin }) {
     setStatus($('authStatus'), 'Actualizando contraseña…');
     try {
       await systemUserApi('complete-password', { password });
-      await supabase.auth.signOut();
-      purgePrivateSessionData();
+      try {
+        await secureSignOut();
+      } finally {
+        purgePrivateSessionData();
+      }
       showLogin('Contraseña actualizada. Iniciá sesión nuevamente.', 'ok');
     } catch (error) {
-      setStatus($('authStatus'), error.message, 'error');
+      purgePrivateSessionData();
+      showLogin(
+        error.message === 'SESSION_EXPIRED'
+          ? 'La contraseña fue actualizada. Iniciá sesión nuevamente.'
+          : 'La contraseña fue actualizada, pero no se pudo cerrar la sesión completamente. Recargá la página antes de volver a ingresar.',
+        'error',
+      );
     }
   });
 }
