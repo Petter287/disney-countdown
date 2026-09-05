@@ -23,6 +23,7 @@ export function purgePrivateSessionData() {
   state.currentUser = null;
   state.currentProfile = null;
   state.tripMemberships = [];
+  state.accessibleTrips = [];
   state.currentTrip = null;
   state.currentMembership = null;
   state.roles = [];
