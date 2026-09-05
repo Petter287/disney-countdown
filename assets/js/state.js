@@ -2,6 +2,7 @@ export const state = {
   currentUser: null,
   currentProfile: null,
   tripMemberships: [],
+  accessibleTrips: [],
   currentTrip: null,
   currentMembership: null,
   roles: [],
