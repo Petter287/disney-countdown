@@ -7,9 +7,16 @@ const SYSTEM_USER_API_URL = `${SUPABASE_URL}/functions/v1/manage-system-user`;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+function signalExpiredSession() {
+  window.dispatchEvent(new CustomEvent('app:session-expired'));
+}
+
 async function callApi(url, payload) {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('SESSION_EXPIRED');
+  if (!session?.access_token) {
+    signalExpiredSession();
+    throw new Error('SESSION_EXPIRED');
+  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -22,6 +29,10 @@ async function callApi(url, payload) {
   });
 
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    signalExpiredSession();
+    throw new Error('SESSION_EXPIRED');
+  }
   if (!response.ok) throw new Error(body.error || 'No se pudo completar la operación.');
   return body;
 }
