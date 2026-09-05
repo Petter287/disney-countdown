@@ -11,6 +11,14 @@ function signalExpiredSession() {
   window.dispatchEvent(new CustomEvent('app:session-expired'));
 }
 
+export async function secureSignOut() {
+  const { error } = await supabase.auth.signOut();
+  if (!error) return;
+
+  const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
+  if (localError) throw localError;
+}
+
 async function callApi(url, payload) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
