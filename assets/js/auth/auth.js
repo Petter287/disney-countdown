@@ -22,8 +22,10 @@ export function bindAuth({ authorize, showLogin }) {
     if (!STRONG_PASSWORD_RE.test(password)) return setStatus($('authStatus'), 'Usá al menos 8 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
 
     setStatus($('authStatus'), 'Actualizando contraseña…');
+    let passwordUpdated = false;
     try {
       await systemUserApi('complete-password', { password });
+      passwordUpdated = true;
       try {
         await secureSignOut();
       } finally {
@@ -31,13 +33,13 @@ export function bindAuth({ authorize, showLogin }) {
       }
       showLogin('Contraseña actualizada. Iniciá sesión nuevamente.', 'ok');
     } catch (error) {
+      if (!passwordUpdated) {
+        setStatus($('authStatus'), error.message, 'error');
+        return;
+      }
+
       purgePrivateSessionData();
-      showLogin(
-        error.message === 'SESSION_EXPIRED'
-          ? 'La contraseña fue actualizada. Iniciá sesión nuevamente.'
-          : 'La contraseña fue actualizada, pero no se pudo cerrar la sesión completamente. Recargá la página antes de volver a ingresar.',
-        'error',
-      );
+      showLogin('La contraseña fue actualizada, pero no se pudo cerrar la sesión completamente. Recargá la página antes de volver a ingresar.', 'error');
     }
   });
 }
