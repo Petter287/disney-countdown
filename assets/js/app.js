@@ -43,14 +43,14 @@ function showTripPicker() {
   $('tripGate').setAttribute('aria-hidden', 'false');
 }
 
-function openTripRoute(membership) {
-  const slug = membership?.trip?.slug;
+function openTripRoute(access) {
+  const slug = access?.trip?.slug;
   if (!slug) return;
   navigate(tripPath(slug));
 }
 
 function refreshTripPicker() {
-  renderTripPicker(state.currentProfile, state.tripMemberships, openTripRoute);
+  renderTripPicker(state.currentProfile, state.accessibleTrips, openTripRoute);
 }
 
 async function handleExpiredSession() {
@@ -78,6 +78,11 @@ async function authorize(user) {
     const bootstrap = await tripApi('bootstrap');
     state.currentProfile = bootstrap.profile;
     state.tripMemberships = bootstrap.memberships || [];
+    state.accessibleTrips = bootstrap.accessibleTrips || state.tripMemberships.map((membership) => ({
+      trip: membership.trip,
+      membership,
+      permissions: membership.permissions || [],
+    }));
   } catch (error) {
     if (error.message === 'SESSION_EXPIRED') return;
     try {
@@ -102,13 +107,13 @@ async function authorize(user) {
   await applyRoute(currentRoute());
 }
 
-async function openTrip(membership) {
-  const trip = membership.trip;
+async function openTrip(access) {
+  const trip = access.trip;
   if (!trip) return;
 
   setStatus($('tripGateStatus'), 'Cargando viaje…');
   let settings;
-  let permissions = membership.permissions || [];
+  let permissions = access.permissions || [];
   try {
     const result = await tripApi('trip-detail', { slug: trip.slug });
     settings = result.settings;
@@ -122,7 +127,7 @@ async function openTrip(membership) {
   }
 
   state.currentTrip = trip;
-  state.currentMembership = { ...membership, permissions };
+  state.currentMembership = access.membership ? { ...access.membership, permissions } : null;
   $('authGate').classList.add('hidden');
   $('tripGate').classList.remove('visible');
   renderTripShell(settings, {
@@ -131,7 +136,8 @@ async function openTrip(membership) {
   });
   $('tripShell').classList.add('visible');
   $('privateTripTitle').textContent = `✨ ${trip.name}`;
-  $('userLine').textContent = `${state.currentProfile.email} · ${membership.role?.name || 'Sin rol'}`;
+  const accessLabel = access.membership?.role?.name || (state.currentProfile.systemOwner ? 'System Owner' : 'Sin rol');
+  $('userLine').textContent = `${state.currentProfile.email} · ${accessLabel}`;
 
   const canManageMembers = permissions.includes('members.manage');
   $('adminPanel').classList.toggle('visible', canManageMembers);
@@ -171,15 +177,15 @@ async function applyRoute(route) {
   if (state.userManagerModal) state.userManagerModal.hide();
 
   if (route.name === 'trip') {
-    const membership = state.tripMemberships.find((item) => item.trip?.slug === route.slug);
-    if (!membership) {
+    const access = state.accessibleTrips.find((item) => item.trip?.slug === route.slug);
+    if (!access) {
       refreshTripPicker();
       showTripPicker();
       setStatus($('tripGateStatus'), 'No tenés acceso al viaje solicitado.', 'error');
       return;
     }
 
-    await openTrip(membership);
+    await openTrip(access);
     return;
   }
 
