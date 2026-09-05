@@ -2,6 +2,10 @@ import { tripApi } from '../api.js';
 import { $, setStatus } from '../shared/dom.js';
 import { state } from '../state.js';
 
+function currentTripRef() {
+  return { slug: state.currentTrip?.slug };
+}
+
 function populateTripRoleSelect() {
   const select = $('tripMemberRole');
   select.replaceChildren();
@@ -50,7 +54,7 @@ function renderTripMembers(members) {
     roleSelect.addEventListener('change', async () => {
       roleSelect.disabled = true;
       try {
-        await tripApi('update-role', { tripId: state.currentTrip.id, userId: member.userId, role: roleSelect.value });
+        await tripApi('update-role', { ...currentTripRef(), userId: member.userId, role: roleSelect.value });
         setStatus($('tripMemberStatus'), 'Rol actualizado.', 'ok');
         await loadTripAdminData();
       } catch (error) {
@@ -66,7 +70,7 @@ function renderTripMembers(members) {
     remove.addEventListener('click', async () => {
       remove.disabled = true;
       try {
-        await tripApi('remove', { tripId: state.currentTrip.id, userId: member.userId });
+        await tripApi('remove', { ...currentTripRef(), userId: member.userId });
         setStatus($('tripMemberStatus'), 'Usuario quitado del viaje.', 'ok');
         await loadTripAdminData();
       } catch (error) {
@@ -117,7 +121,7 @@ function renderAvailableUsers(users) {
 
 export async function loadTripAdminData() {
   try {
-    const result = await tripApi('trip-admin', { tripId: state.currentTrip.id });
+    const result = await tripApi('trip-admin', currentTripRef());
     state.roles = result.roles || [];
     populateTripRoleSelect();
     renderTripMembers(result.members || []);
@@ -136,7 +140,7 @@ export function bindTripAdminForm() {
     setStatus($('tripMemberStatus'), 'Agregando usuarios…');
     try {
       await Promise.all(selected.map((userId) => tripApi('assign', {
-        tripId: state.currentTrip.id,
+        ...currentTripRef(),
         userId,
         role: $('tripMemberRole').value,
       })));
