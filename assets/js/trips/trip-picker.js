@@ -1,4 +1,5 @@
 import { $, setStatus } from '../shared/dom.js';
+import { formatDestination } from '../shared/geography.js';
 
 function displayName(profile) {
   return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
@@ -35,7 +36,7 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTri
 
     const destination = document.createElement('div');
     destination.className = 'trip-muted';
-    destination.textContent = trip.destination || '';
+    destination.textContent = formatDestination(trip.destination, trip.countryCode || trip.country_code);
     const hint = document.createElement('div');
     hint.className = 'small mt-3';
     hint.textContent = 'Abrir viaje →';
