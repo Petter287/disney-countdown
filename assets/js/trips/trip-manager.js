@@ -1,7 +1,14 @@
 import { tripApi } from '../api.js';
 import { $, setStatus } from '../shared/dom.js';
+import { COUNTRY_CODES, countryOptions, supportedTimezones } from '../shared/geography.js';
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 let activeTrip = null;
+let activeSettings = null;
+let objectPreviewUrl = null;
 let onSaved = null;
 let onDeleted = null;
 let onCancel = null;
@@ -33,28 +40,61 @@ function ensureUi() {
         </div>
         <button id="tripCrudCancel" type="button" class="btn btn-outline-light btn-sm">Volver</button>
       </div>
-      <form id="tripCrudForm" autocomplete="off">
+      <form id="tripCrudForm" autocomplete="off" novalidate>
         <div class="row g-3">
           <div class="col-md-6">
             <label for="tripCrudName" class="form-label">Nombre</label>
             <input id="tripCrudName" class="form-control" maxlength="120" required>
+            <div class="invalid-feedback">Ingresá un nombre para el viaje.</div>
           </div>
           <div class="col-md-6">
             <label for="tripCrudSlug" class="form-label">Slug</label>
-            <input id="tripCrudSlug" class="form-control" maxlength="120" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required>
-            <div class="form-text text-light opacity-75">Ejemplo: orlando-2027</div>
+            <input id="tripCrudSlug" class="form-control" maxlength="120" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required autocapitalize="none" spellcheck="false">
+            <div class="form-text text-light opacity-75">Solo minúsculas, números y guiones. Ejemplo: orlando-2027</div>
+            <div class="invalid-feedback">Usá un slug válido, por ejemplo orlando-2027.</div>
           </div>
+
+          <div class="col-md-6">
+            <label for="tripCrudCountry" class="form-label">País</label>
+            <select id="tripCrudCountry" class="form-select" required>
+              <option value="">Seleccioná un país</option>
+            </select>
+            <div class="invalid-feedback">Seleccioná un país válido.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="tripCrudDestination" class="form-label">Ciudad / región</label>
+            <input id="tripCrudDestination" class="form-control" maxlength="160" placeholder="Ej. Orlando, Florida">
+            <div class="form-text text-light opacity-75">Opcional. El país se guarda por separado y se valida.</div>
+          </div>
+
           <div class="col-12">
-            <label for="tripCrudDestination" class="form-label">Destino</label>
-            <input id="tripCrudDestination" class="form-control" maxlength="160" required>
+            <label for="tripCrudTimezone" class="form-label">Zona horaria del destino</label>
+            <input id="tripCrudTimezone" class="form-control" list="tripCrudTimezoneOptions" maxlength="100" required placeholder="Ej. America/New_York">
+            <datalist id="tripCrudTimezoneOptions"></datalist>
+            <div class="form-text text-light opacity-75">Se usa para interpretar correctamente la medianoche de la fecha de inicio.</div>
+            <div class="invalid-feedback">Elegí una zona horaria válida.</div>
           </div>
+
           <div class="col-md-6">
             <label for="tripCrudStartsOn" class="form-label">Fecha de inicio</label>
             <input id="tripCrudStartsOn" class="form-control" type="date" required>
+            <div class="invalid-feedback">Ingresá una fecha de inicio válida.</div>
           </div>
           <div class="col-md-6">
             <label for="tripCrudEndsOn" class="form-label">Fecha de fin</label>
             <input id="tripCrudEndsOn" class="form-control" type="date">
+            <div class="invalid-feedback">La fecha de fin no puede ser anterior al inicio.</div>
+          </div>
+
+          <div class="col-12">
+            <label for="tripCrudBackground" class="form-label">Imagen de fondo</label>
+            <input id="tripCrudBackground" class="form-control" type="file" accept="image/jpeg,image/png,image/webp">
+            <div class="form-text text-light opacity-75">JPG, PNG o WebP. Máximo 4 MB. Si no cargás una imagen, se usa un fondo neutro.</div>
+            <div id="tripCrudBackgroundPreview" class="mt-3 d-none"></div>
+            <div id="tripCrudRemoveBackgroundGroup" class="form-check mt-2 d-none">
+              <input id="tripCrudRemoveBackground" class="form-check-input" type="checkbox">
+              <label for="tripCrudRemoveBackground" class="form-check-label">Quitar la imagen actual</label>
+            </div>
           </div>
         </div>
         <div id="tripCrudStatus" class="small mt-3 trip-muted" aria-live="polite"></div>
@@ -66,10 +106,98 @@ function ensureUi() {
     </section>`;
 
   document.body.insertBefore(gate, $('tripShell'));
+
+  const countrySelect = $('tripCrudCountry');
+  for (const country of countryOptions()) {
+    const option = document.createElement('option');
+    option.value = country.code;
+    option.textContent = country.name;
+    countrySelect.append(option);
+  }
+
+  const timezoneList = $('tripCrudTimezoneOptions');
+  for (const timezone of supportedTimezones()) {
+    const option = document.createElement('option');
+    option.value = timezone;
+    timezoneList.append(option);
+  }
 }
 
 function normalizeSlug(value) {
   return value.trim().toLowerCase();
+}
+
+function isValidDateOnly(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+function isValidTimezone(value) {
+  return supportedTimezones().includes(value);
+}
+
+function clearPreviewObjectUrl() {
+  if (!objectPreviewUrl) return;
+  URL.revokeObjectURL(objectPreviewUrl);
+  objectPreviewUrl = null;
+}
+
+function renderBackgroundPreview(url = '') {
+  clearPreviewObjectUrl();
+  const preview = $('tripCrudBackgroundPreview');
+  preview.replaceChildren();
+  preview.classList.toggle('d-none', !url);
+  if (!url) return;
+
+  const image = document.createElement('img');
+  image.src = url;
+  image.alt = 'Vista previa del fondo del viaje';
+  image.className = 'trip-background-preview';
+  preview.append(image);
+}
+
+function renderSelectedFile(file) {
+  if (!file) {
+    renderBackgroundPreview(activeSettings?.backgroundUrl || '');
+    return;
+  }
+  clearPreviewObjectUrl();
+  objectPreviewUrl = URL.createObjectURL(file);
+  const preview = $('tripCrudBackgroundPreview');
+  preview.replaceChildren();
+  preview.classList.remove('d-none');
+  const image = document.createElement('img');
+  image.src = objectPreviewUrl;
+  image.alt = 'Vista previa del nuevo fondo del viaje';
+  image.className = 'trip-background-preview';
+  preview.append(image);
+}
+
+function validateImage(file) {
+  if (!file) return null;
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return 'La imagen debe ser JPG, PNG o WebP.';
+  if (file.size > MAX_IMAGE_BYTES) return 'La imagen no puede superar los 4 MB.';
+  if (!file.size) return 'La imagen está vacía.';
+  return null;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      const comma = value.indexOf(',');
+      if (comma < 0) return reject(new Error('No se pudo procesar la imagen seleccionada.'));
+      resolve(value.slice(comma + 1));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function setBusy(isBusy) {
@@ -78,30 +206,85 @@ function setBusy(isBusy) {
   $('tripCrudCancel').disabled = isBusy;
 }
 
+function setFieldValidity(element, valid, message = '') {
+  element.setCustomValidity(valid ? '' : message);
+}
+
+function validateForm() {
+  const form = $('tripCrudForm');
+  const slug = normalizeSlug($('tripCrudSlug').value);
+  const name = $('tripCrudName').value.trim();
+  const countryCode = $('tripCrudCountry').value.trim().toUpperCase();
+  const destination = $('tripCrudDestination').value.trim();
+  const defaultTimezone = $('tripCrudTimezone').value.trim();
+  const startsOn = $('tripCrudStartsOn').value;
+  const endsOn = $('tripCrudEndsOn').value || null;
+  const file = $('tripCrudBackground').files?.[0] || null;
+
+  $('tripCrudSlug').value = slug;
+  setFieldValidity($('tripCrudName'), Boolean(name), 'Ingresá un nombre.');
+  setFieldValidity($('tripCrudSlug'), SLUG_RE.test(slug), 'Slug inválido.');
+  setFieldValidity($('tripCrudCountry'), COUNTRY_CODES.includes(countryCode), 'País inválido.');
+  setFieldValidity($('tripCrudTimezone'), isValidTimezone(defaultTimezone), 'Zona horaria inválida.');
+  setFieldValidity($('tripCrudStartsOn'), isValidDateOnly(startsOn), 'Fecha inválida.');
+  setFieldValidity($('tripCrudEndsOn'), !endsOn || (isValidDateOnly(endsOn) && endsOn >= startsOn), 'Rango de fechas inválido.');
+
+  form.classList.add('was-validated');
+  if (!form.checkValidity()) return { error: 'Revisá los campos marcados antes de guardar.' };
+
+  const imageError = validateImage(file);
+  if (imageError) return { error: imageError };
+
+  return {
+    value: {
+      slug,
+      name,
+      destination,
+      countryCode,
+      defaultTimezone,
+      startsOn,
+      endsOn,
+      file,
+      removeBackground: $('tripCrudRemoveBackground').checked,
+    },
+  };
+}
+
 export function hideTripManager() {
   const gate = $('tripManagerGate');
   if (!gate) return;
+  clearPreviewObjectUrl();
   gate.classList.remove('visible');
   gate.setAttribute('aria-hidden', 'true');
 }
 
-export function showTripManager(trip = null) {
+export function showTripManager(data = null) {
   ensureUi();
-  activeTrip = trip;
-  const editing = Boolean(trip);
+  activeTrip = data?.trip || null;
+  activeSettings = data?.settings || null;
+  const editing = Boolean(activeTrip);
 
-  $('tripCrudForm').reset();
+  const form = $('tripCrudForm');
+  form.reset();
+  form.classList.remove('was-validated');
   $('tripCrudTitle').textContent = editing ? 'Editar viaje' : 'Nuevo viaje';
   $('tripCrudIntro').textContent = editing
-    ? 'Actualizá los datos generales del viaje.'
-    : 'Creá el viaje. Después vas a poder personalizar su cuenta regresiva y configuración.';
+    ? 'Actualizá los datos generales, ubicación, zona horaria y fondo del viaje.'
+    : 'Creá el viaje con una ubicación y zona horaria válidas para que la cuenta regresiva calcule correctamente.';
 
-  $('tripCrudSlug').value = trip?.slug || '';
-  $('tripCrudName').value = trip?.name || '';
-  $('tripCrudDestination').value = trip?.destination || '';
-  $('tripCrudStartsOn').value = trip?.starts_on || '';
-  $('tripCrudEndsOn').value = trip?.ends_on || '';
+  $('tripCrudSlug').value = activeTrip?.slug || '';
+  $('tripCrudName').value = activeTrip?.name || '';
+  $('tripCrudCountry').value = activeTrip?.countryCode || '';
+  $('tripCrudDestination').value = activeTrip?.destination || '';
+  $('tripCrudTimezone').value = activeSettings?.defaultTimezone || '';
+  $('tripCrudStartsOn').value = activeTrip?.startsOn || '';
+  $('tripCrudEndsOn').value = activeTrip?.endsOn || '';
   $('tripCrudDelete').classList.toggle('d-none', !editing);
+
+  const hasBackground = Boolean(activeSettings?.backgroundUrl);
+  $('tripCrudRemoveBackgroundGroup').classList.toggle('d-none', !hasBackground);
+  $('tripCrudRemoveBackground').checked = false;
+  renderBackgroundPreview(activeSettings?.backgroundUrl || '');
   setStatus($('tripCrudStatus'));
 
   $('tripManagerGate').classList.add('visible');
@@ -117,30 +300,49 @@ export function bindTripManager(callbacks = {}) {
 
   $('newTripButton').addEventListener('click', () => onNew?.());
   $('tripCrudCancel').addEventListener('click', () => onCancel?.());
+  $('tripCrudSlug').addEventListener('input', (event) => {
+    event.target.value = normalizeSlug(event.target.value.replace(/\s+/g, '-'));
+  });
+  $('tripCrudBackground').addEventListener('change', () => {
+    const file = $('tripCrudBackground').files?.[0] || null;
+    const error = validateImage(file);
+    if (error) {
+      $('tripCrudBackground').value = '';
+      renderSelectedFile(null);
+      setStatus($('tripCrudStatus'), error, 'error');
+      return;
+    }
+    if (file) $('tripCrudRemoveBackground').checked = false;
+    renderSelectedFile(file);
+    setStatus($('tripCrudStatus'));
+  });
+  $('tripCrudRemoveBackground').addEventListener('change', () => {
+    if ($('tripCrudRemoveBackground').checked) {
+      $('tripCrudBackground').value = '';
+      renderBackgroundPreview('');
+    } else {
+      renderBackgroundPreview(activeSettings?.backgroundUrl || '');
+    }
+  });
 
   $('tripCrudForm').addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const slug = normalizeSlug($('tripCrudSlug').value);
-    const name = $('tripCrudName').value.trim();
-    const destination = $('tripCrudDestination').value.trim();
-    const startsOn = $('tripCrudStartsOn').value;
-    const endsOn = $('tripCrudEndsOn').value || null;
-
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      return setStatus($('tripCrudStatus'), 'El slug solo puede usar minúsculas, números y guiones.', 'error');
-    }
-    if (!name || !destination || !startsOn) {
-      return setStatus($('tripCrudStatus'), 'Completá nombre, destino y fecha de inicio.', 'error');
-    }
-    if (endsOn && endsOn < startsOn) {
-      return setStatus($('tripCrudStatus'), 'La fecha de fin no puede ser anterior al inicio.', 'error');
-    }
+    const validation = validateForm();
+    if (validation.error) return setStatus($('tripCrudStatus'), validation.error, 'error');
 
     setBusy(true);
     setStatus($('tripCrudStatus'), activeTrip ? 'Guardando cambios…' : 'Creando viaje…');
     try {
-      const payload = { slug, name, destination, startsOn, endsOn };
+      const { file, ...payload } = validation.value;
+      if (file) {
+        payload.backgroundImage = {
+          contentBase64: await fileToBase64(file),
+          contentType: file.type,
+          originalName: file.name,
+        };
+      }
+
       const result = activeTrip
         ? await tripApi('trip-update', { ...payload, currentSlug: activeTrip.slug })
         : await tripApi('trip-create', payload);
@@ -154,7 +356,7 @@ export function bindTripManager(callbacks = {}) {
 
   $('tripCrudDelete').addEventListener('click', async () => {
     if (!activeTrip) return;
-    if (!window.confirm(`¿Eliminar "${activeTrip.name}"? Esta acción también elimina su configuración y participantes.`)) return;
+    if (!window.confirm(`¿Eliminar "${activeTrip.name}"? Esta acción también elimina su configuración, participantes e imagen de fondo.`)) return;
 
     setBusy(true);
     setStatus($('tripCrudStatus'), 'Eliminando viaje…');
