@@ -1,6 +1,6 @@
 import { tripApi } from '../api.js';
 import { $, setStatus } from '../shared/dom.js';
-import { COUNTRY_CODES, countryOptions, supportedTimezones } from '../shared/geography.js';
+import { COUNTRY_CODES, countryOptions, inferTimezone, regionOptions } from '../shared/geography.js';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -62,17 +62,16 @@ function ensureUi() {
             <div class="invalid-feedback">Seleccioná un país válido.</div>
           </div>
           <div class="col-md-6">
-            <label for="tripCrudDestination" class="form-label">Ciudad / región</label>
-            <input id="tripCrudDestination" class="form-control" maxlength="160" placeholder="Ej. Orlando, Florida">
-            <div class="form-text text-light opacity-75">Opcional. El país se guarda por separado y se valida.</div>
+            <label for="tripCrudRegion" class="form-label">Provincia / estado <span class="trip-muted fw-normal">(opcional)</span></label>
+            <select id="tripCrudRegion" class="form-select" disabled>
+              <option value="">Primero seleccioná un país</option>
+            </select>
+            <div class="form-text text-light opacity-75">Ayuda a ajustar automáticamente la hora local del destino.</div>
           </div>
 
           <div class="col-12">
-            <label for="tripCrudTimezone" class="form-label">Zona horaria del destino</label>
-            <input id="tripCrudTimezone" class="form-control" list="tripCrudTimezoneOptions" maxlength="100" required placeholder="Ej. America/New_York">
-            <datalist id="tripCrudTimezoneOptions"></datalist>
-            <div class="form-text text-light opacity-75">Se usa para interpretar correctamente la medianoche de la fecha de inicio.</div>
-            <div class="invalid-feedback">Elegí una zona horaria válida.</div>
+            <label for="tripCrudDestination" class="form-label">Ciudad <span class="trip-muted fw-normal">(opcional)</span></label>
+            <input id="tripCrudDestination" class="form-control" maxlength="160" placeholder="Ej. Orlando">
           </div>
 
           <div class="col-md-6">
@@ -114,13 +113,6 @@ function ensureUi() {
     option.textContent = country.name;
     countrySelect.append(option);
   }
-
-  const timezoneList = $('tripCrudTimezoneOptions');
-  for (const timezone of supportedTimezones()) {
-    const option = document.createElement('option');
-    option.value = timezone;
-    timezoneList.append(option);
-  }
 }
 
 function normalizeSlug(value) {
@@ -137,8 +129,25 @@ function isValidDateOnly(value) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-function isValidTimezone(value) {
-  return supportedTimezones().includes(value);
+function populateRegions(countryCode, selectedRegion = '') {
+  const select = $('tripCrudRegion');
+  select.replaceChildren();
+
+  const regions = regionOptions(countryCode);
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = regions.length ? 'Sin provincia / estado' : 'No hay subdivisiones disponibles';
+  select.append(empty);
+
+  for (const region of regions) {
+    const option = document.createElement('option');
+    option.value = region.code;
+    option.textContent = region.name;
+    select.append(option);
+  }
+
+  select.disabled = !countryCode || !regions.length;
+  select.value = regions.some((region) => region.code === selectedRegion) ? selectedRegion : '';
 }
 
 function clearPreviewObjectUrl() {
@@ -215,22 +224,23 @@ function validateForm() {
   const slug = normalizeSlug($('tripCrudSlug').value);
   const name = $('tripCrudName').value.trim();
   const countryCode = $('tripCrudCountry').value.trim().toUpperCase();
+  const regionCode = $('tripCrudRegion').value.trim();
   const destination = $('tripCrudDestination').value.trim();
-  const defaultTimezone = $('tripCrudTimezone').value.trim();
   const startsOn = $('tripCrudStartsOn').value;
   const endsOn = $('tripCrudEndsOn').value || null;
   const file = $('tripCrudBackground').files?.[0] || null;
+  const defaultTimezone = inferTimezone(countryCode, regionCode);
 
   $('tripCrudSlug').value = slug;
   setFieldValidity($('tripCrudName'), Boolean(name), 'Ingresá un nombre.');
   setFieldValidity($('tripCrudSlug'), SLUG_RE.test(slug), 'Slug inválido.');
   setFieldValidity($('tripCrudCountry'), COUNTRY_CODES.includes(countryCode), 'País inválido.');
-  setFieldValidity($('tripCrudTimezone'), isValidTimezone(defaultTimezone), 'Zona horaria inválida.');
   setFieldValidity($('tripCrudStartsOn'), isValidDateOnly(startsOn), 'Fecha inválida.');
   setFieldValidity($('tripCrudEndsOn'), !endsOn || (isValidDateOnly(endsOn) && endsOn >= startsOn), 'Rango de fechas inválido.');
 
   form.classList.add('was-validated');
   if (!form.checkValidity()) return { error: 'Revisá los campos marcados antes de guardar.' };
+  if (!defaultTimezone) return { error: 'No se pudo determinar automáticamente la hora local del destino.' };
 
   const imageError = validateImage(file);
   if (imageError) return { error: imageError };
@@ -241,6 +251,7 @@ function validateForm() {
       name,
       destination,
       countryCode,
+      regionCode: regionCode || null,
       defaultTimezone,
       startsOn,
       endsOn,
@@ -269,14 +280,14 @@ export function showTripManager(data = null) {
   form.classList.remove('was-validated');
   $('tripCrudTitle').textContent = editing ? 'Editar viaje' : 'Nuevo viaje';
   $('tripCrudIntro').textContent = editing
-    ? 'Actualizá los datos generales, ubicación, zona horaria y fondo del viaje.'
-    : 'Creá el viaje con una ubicación y zona horaria válidas para que la cuenta regresiva calcule correctamente.';
+    ? 'Actualizá los datos generales, el destino y el fondo del viaje.'
+    : 'Elegí el país y, si querés, la provincia/estado y ciudad. La hora local se calcula automáticamente.';
 
   $('tripCrudSlug').value = activeTrip?.slug || '';
   $('tripCrudName').value = activeTrip?.name || '';
   $('tripCrudCountry').value = activeTrip?.countryCode || '';
+  populateRegions(activeTrip?.countryCode || '', activeTrip?.regionCode || '');
   $('tripCrudDestination').value = activeTrip?.destination || '';
-  $('tripCrudTimezone').value = activeSettings?.defaultTimezone || '';
   $('tripCrudStartsOn').value = activeTrip?.startsOn || '';
   $('tripCrudEndsOn').value = activeTrip?.endsOn || '';
   $('tripCrudDelete').classList.toggle('d-none', !editing);
@@ -302,6 +313,9 @@ export function bindTripManager(callbacks = {}) {
   $('tripCrudCancel').addEventListener('click', () => onCancel?.());
   $('tripCrudSlug').addEventListener('input', (event) => {
     event.target.value = normalizeSlug(event.target.value.replace(/\s+/g, '-'));
+  });
+  $('tripCrudCountry').addEventListener('change', () => {
+    populateRegions($('tripCrudCountry').value);
   });
   $('tripCrudBackground').addEventListener('change', () => {
     const file = $('tripCrudBackground').files?.[0] || null;
