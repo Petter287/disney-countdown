@@ -38,6 +38,7 @@ export function purgePrivateSessionData() {
   clearChildren('tripMemberRole');
   clearChildren('systemUserList');
   clearChildren('systemUserAssignments');
+  clearChildren('tripCrudBackgroundPreview');
 
   clearText('tripGreeting');
   clearText('privateTripTitle');
@@ -57,6 +58,8 @@ export function purgePrivateSessionData() {
   const tripManagerGate = $('tripManagerGate');
   tripManagerGate?.classList.remove('visible');
   tripManagerGate?.setAttribute('aria-hidden', 'true');
+  $('tripCrudBackgroundPreview')?.classList.add('d-none');
+  $('tripCrudRemoveBackgroundGroup')?.classList.add('d-none');
 
   $('adminPanel')?.classList.remove('visible');
   $('systemOwnerActions')?.classList.remove('visible');
