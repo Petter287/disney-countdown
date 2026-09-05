@@ -9,6 +9,7 @@ export const state = {
   countdownTimer: null,
   privateModal: null,
   userManagerModal: null,
+  tripManagerModal: null,
   systemData: { users: [], trips: [], roles: [] },
   editingUserId: null,
 };
