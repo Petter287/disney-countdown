@@ -10,6 +10,8 @@ import { renderTripPicker } from './trips/trip-picker.js';
 import { renderTripShell } from './trips/trip-view.js';
 import { bindUserManager, openUserManager } from './users/user-manager.js';
 
+let handlingExpiredSession = false;
+
 function clearTripUi() {
   stopCountdown();
   state.currentTrip = null;
@@ -51,6 +53,25 @@ function refreshTripPicker() {
   renderTripPicker(state.currentProfile, state.tripMemberships, openTripRoute);
 }
 
+async function handleExpiredSession() {
+  if (handlingExpiredSession) return;
+  handlingExpiredSession = true;
+
+  if (state.privateModal) state.privateModal.hide();
+  if (state.userManagerModal) state.userManagerModal.hide();
+  purgePrivateSessionData();
+  navigate('/', { replace: true });
+  showLogin('Tu sesión venció. Iniciá sesión nuevamente.', 'error');
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // The private UI and application state are already purged locally.
+  } finally {
+    handlingExpiredSession = false;
+  }
+}
+
 async function authorize(user) {
   state.currentUser = user;
   try {
@@ -58,6 +79,7 @@ async function authorize(user) {
     state.currentProfile = bootstrap.profile;
     state.tripMemberships = bootstrap.memberships || [];
   } catch (error) {
+    if (error.message === 'SESSION_EXPIRED') return;
     try {
       await supabase.auth.signOut();
     } finally {
@@ -92,6 +114,7 @@ async function openTrip(membership) {
     settings = result.settings;
     permissions = result.permissions || permissions;
   } catch (error) {
+    if (error.message === 'SESSION_EXPIRED') return;
     showTripPicker();
     refreshTripPicker();
     setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración del viaje.', 'error');
@@ -185,6 +208,7 @@ function bindNavigation() {
   $('userManagerModal').addEventListener('hidden.bs.modal', () => {
     if (currentRoute().name === 'users') navigate('/');
   });
+  window.addEventListener('app:session-expired', handleExpiredSession);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
