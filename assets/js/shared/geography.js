@@ -1,4 +1,7 @@
-export const COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"];
+import { Country, State } from 'https://cdn.jsdelivr.net/npm/country-state-city@3.2.1/+esm';
+import tzlookup from 'https://cdn.jsdelivr.net/npm/tz-lookup@6.1.25/+esm';
+
+export const COUNTRY_CODES = Country.getAllCountries().map((country) => country.isoCode);
 
 const countryNames = new Intl.DisplayNames(['es'], { type: 'region' });
 
@@ -9,35 +12,70 @@ export function countryName(code) {
 }
 
 export function countryOptions() {
-  return COUNTRY_CODES
-    .map((code) => ({ code, name: countryName(code) }))
+  return Country.getAllCountries()
+    .map((country) => ({ code: country.isoCode, name: countryName(country.isoCode) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
-export function formatDestination(destination, countryCode) {
-  const place = String(destination || '').trim();
-  const country = countryName(countryCode);
-  if (place && country) return `${place} · ${country}`;
-  return place || country || '';
+export function regionOptions(countryCode) {
+  const normalized = String(countryCode || '').trim().toUpperCase();
+  if (!normalized) return [];
+  return State.getStatesOfCountry(normalized)
+    .map((state) => ({ code: state.isoCode, name: state.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 }
 
-export function supportedTimezones() {
-  if (typeof Intl.supportedValuesOf === 'function') {
-    return Intl.supportedValuesOf('timeZone');
+export function regionName(countryCode, regionCode) {
+  const country = String(countryCode || '').trim().toUpperCase();
+  const region = String(regionCode || '').trim();
+  if (!country || !region) return '';
+  return State.getStateByCodeAndCountry(region, country)?.name || region;
+}
+
+function coordinatesFor(countryCode, regionCode = '') {
+  const country = String(countryCode || '').trim().toUpperCase();
+  const region = String(regionCode || '').trim();
+
+  if (country && region) {
+    const state = State.getStateByCodeAndCountry(region, country);
+    const latitude = Number(state?.latitude);
+    const longitude = Number(state?.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) return { latitude, longitude };
   }
 
-  return [
-    'UTC',
-    'America/Argentina/Buenos_Aires',
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Sao_Paulo',
-    'Europe/Madrid',
-    'Europe/London',
-    'Europe/Paris',
-    'Asia/Tokyo',
-    'Australia/Sydney',
-  ];
+  const countryData = Country.getCountryByCode(country);
+  const latitude = Number(countryData?.latitude);
+  const longitude = Number(countryData?.longitude);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) return { latitude, longitude };
+  return null;
+}
+
+export function inferTimezone(countryCode, regionCode = '') {
+  const country = Country.getCountryByCode(String(countryCode || '').trim().toUpperCase());
+  if (!country) return '';
+
+  if (!regionCode && country.timezones?.length === 1 && country.timezones[0]?.zoneName) {
+    return country.timezones[0].zoneName;
+  }
+
+  const coordinates = coordinatesFor(country.isoCode, regionCode);
+  if (!coordinates) return country.timezones?.[0]?.zoneName || '';
+
+  try {
+    return tzlookup(coordinates.latitude, coordinates.longitude);
+  } catch {
+    return country.timezones?.[0]?.zoneName || '';
+  }
+}
+
+export function formatDestination(city, countryCode, regionCode = '') {
+  const parts = [];
+  const place = String(city || '').trim();
+  const region = regionName(countryCode, regionCode);
+  const country = countryName(countryCode);
+
+  if (place) parts.push(place);
+  if (region && region !== place) parts.push(region);
+  if (country) parts.push(country);
+  return parts.join(' · ');
 }
