@@ -1,13 +1,16 @@
-import { supabase, tripApi } from './api.js';
+import { secureSignOut, supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
 import { bindRouter, currentRoute, navigate, tripPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
+import { purgePrivateSessionData } from './shared/session-security.js';
 import { state } from './state.js';
 import { startCountdown, stopCountdown } from './trips/countdown.js';
 import { bindTripAdminForm, loadTripAdminData } from './trips/trip-admin.js';
 import { renderTripPicker } from './trips/trip-picker.js';
 import { renderTripShell } from './trips/trip-view.js';
 import { bindUserManager, openUserManager } from './users/user-manager.js';
+
+let handlingExpiredSession = false;
 
 function clearTripUi() {
   stopCountdown();
@@ -50,6 +53,25 @@ function refreshTripPicker() {
   renderTripPicker(state.currentProfile, state.tripMemberships, openTripRoute);
 }
 
+async function handleExpiredSession() {
+  if (handlingExpiredSession) return;
+  handlingExpiredSession = true;
+
+  if (state.privateModal) state.privateModal.hide();
+  if (state.userManagerModal) state.userManagerModal.hide();
+  purgePrivateSessionData();
+  navigate('/', { replace: true });
+  showLogin('Tu sesión venció. Iniciá sesión nuevamente.', 'error');
+
+  try {
+    await secureSignOut();
+  } catch {
+    // The private UI and application state are already purged locally.
+  } finally {
+    handlingExpiredSession = false;
+  }
+}
+
 async function authorize(user) {
   state.currentUser = user;
   try {
@@ -57,11 +79,13 @@ async function authorize(user) {
     state.currentProfile = bootstrap.profile;
     state.tripMemberships = bootstrap.memberships || [];
   } catch (error) {
-    await supabase.auth.signOut();
-    state.currentUser = null;
-    state.currentProfile = null;
-    state.tripMemberships = [];
-    showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
+    if (error.message === 'SESSION_EXPIRED') return;
+    try {
+      await secureSignOut();
+    } finally {
+      purgePrivateSessionData();
+      showLogin(error.message || 'No se pudo validar tu acceso.', 'error');
+    }
     return;
   }
 
@@ -90,6 +114,7 @@ async function openTrip(membership) {
     settings = result.settings;
     permissions = result.permissions || permissions;
   } catch (error) {
+    if (error.message === 'SESSION_EXPIRED') return;
     showTripPicker();
     refreshTripPicker();
     setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración del viaje.', 'error');
@@ -166,15 +191,14 @@ async function applyRoute(route) {
 async function logout() {
   if (state.privateModal) state.privateModal.hide();
   if (state.userManagerModal) state.userManagerModal.hide();
-  clearTripUi();
-  await supabase.auth.signOut();
-  state.currentUser = null;
-  state.currentProfile = null;
-  state.tripMemberships = [];
-  $('loginForm').reset();
-  $('changePasswordForm').reset();
-  navigate('/', { replace: true });
-  showLogin();
+
+  try {
+    await secureSignOut();
+  } finally {
+    purgePrivateSessionData();
+    navigate('/', { replace: true });
+    showLogin();
+  }
 }
 
 function bindNavigation() {
@@ -184,6 +208,7 @@ function bindNavigation() {
   $('userManagerModal').addEventListener('hidden.bs.modal', () => {
     if (currentRoute().name === 'users') navigate('/');
   });
+  window.addEventListener('app:session-expired', handleExpiredSession);
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -198,5 +223,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.user) await authorize(session.user);
-  else showLogin();
+  else {
+    purgePrivateSessionData();
+    showLogin();
+  }
 });

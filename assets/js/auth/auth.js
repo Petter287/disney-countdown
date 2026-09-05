@@ -1,7 +1,7 @@
-import { supabase, systemUserApi } from '../api.js';
+import { secureSignOut, supabase, systemUserApi } from '../api.js';
 import { STRONG_PASSWORD_RE } from '../shared/constants.js';
 import { $, setStatus } from '../shared/dom.js';
-import { state } from '../state.js';
+import { purgePrivateSessionData } from '../shared/session-security.js';
 
 export function bindAuth({ authorize, showLogin }) {
   $('loginForm').addEventListener('submit', async (event) => {
@@ -22,16 +22,24 @@ export function bindAuth({ authorize, showLogin }) {
     if (!STRONG_PASSWORD_RE.test(password)) return setStatus($('authStatus'), 'Usá al menos 8 caracteres con mayúscula, minúscula, número y símbolo.', 'error');
 
     setStatus($('authStatus'), 'Actualizando contraseña…');
+    let passwordUpdated = false;
     try {
       await systemUserApi('complete-password', { password });
-      await supabase.auth.signOut();
-      $('changePasswordForm').reset();
-      $('loginForm').reset();
-      state.currentUser = null;
-      state.currentProfile = null;
+      passwordUpdated = true;
+      try {
+        await secureSignOut();
+      } finally {
+        purgePrivateSessionData();
+      }
       showLogin('Contraseña actualizada. Iniciá sesión nuevamente.', 'ok');
     } catch (error) {
-      setStatus($('authStatus'), error.message, 'error');
+      if (!passwordUpdated) {
+        setStatus($('authStatus'), error.message, 'error');
+        return;
+      }
+
+      purgePrivateSessionData();
+      showLogin('La contraseña fue actualizada, pero no se pudo cerrar la sesión completamente. Recargá la página antes de volver a ingresar.', 'error');
     }
   });
 }
