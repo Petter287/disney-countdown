@@ -1,4 +1,4 @@
-.trip-participants-panel{width:min(1120px,100%)}
+.trip-participants-panel{width:min(1120px,100%);max-height:calc(100vh - 2rem);overflow:auto}
 .participant-summary-card,.participant-section{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.11);border-radius:1rem}
 .participant-summary-value{font-size:1.65rem;font-weight:850;line-height:1;color:var(--trip-soft)}
 .participant-member-row{border:1px solid rgba(255,255,255,.08)}
