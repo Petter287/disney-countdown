@@ -11,6 +11,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { TripCreatePage } from '../pages/TripCreatePage';
 import { TripDetailPage } from '../pages/TripDetailPage';
 import { TripEditPage } from '../pages/TripEditPage';
+import { TripParticipantsPage } from '../pages/TripParticipantsPage';
 import { TripSettingsPage } from '../pages/TripSettingsPage';
 import { TripsPage } from '../pages/TripsPage';
 
@@ -33,7 +34,9 @@ export function App() {
             <Route element={<TripPermissionRoute permission="trip.edit" />}>
               <Route path="/trips/:slug/settings" element={<TripSettingsPage />} />
             </Route>
-            <Route path="/trips/:slug/participants" element={<AuthenticatedPlaceholderPage title="Participantes" />} />
+            <Route element={<TripPermissionRoute permission="members.manage" />}>
+              <Route path="/trips/:slug/participants" element={<TripParticipantsPage />} />
+            </Route>
           </Route>
           <Route path="/users" element={<AuthenticatedPlaceholderPage title="Usuarios del sistema" />} />
         </Route>
