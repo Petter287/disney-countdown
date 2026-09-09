@@ -1,6 +1,6 @@
 import { secureSignOut, supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
-import { bindRouter, currentRoute, navigate, tripEditPath, tripPath } from './router.js';
+import { bindRouter, currentRoute, navigate, tripEditPath, tripPath, tripSettingsPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
 import { purgePrivateSessionData } from './shared/session-security.js';
 import { state } from './state.js';
@@ -9,6 +9,7 @@ import { bindTripAdminForm, loadTripAdminData } from './trips/trip-admin.js';
 import { bindTripManager, hideTripManager, showTripManager } from './trips/trip-manager.js';
 import { renderTripPicker } from './trips/trip-picker.js';
 import { renderTripShell } from './trips/trip-view.js';
+import { bindTripSettings, hideTripSettings, showTripSettings } from './trips/trip-settings.js';
 import { bindUserManager, openUserManager } from './users/user-manager.js';
 
 let handlingExpiredSession = false;
@@ -28,6 +29,7 @@ function clearTripUi() {
 }
 
 function showLogin(message = '', type = '') {
+  hideTripSettings();
   hideTripManager();
   clearTripUi();
   $('tripGate').classList.remove('visible');
@@ -39,6 +41,7 @@ function showLogin(message = '', type = '') {
 }
 
 function showTripPicker() {
+  hideTripSettings();
   hideTripManager();
   clearTripUi();
   $('authGate').classList.add('hidden');
@@ -64,7 +67,8 @@ function editTripRoute(access) {
 }
 
 function refreshTripPicker() {
-  renderTripPicker(state.currentProfile, state.accessibleTrips, openTripRoute, editTripRoute);
+  renderTripPicker(state.currentProfile, state.accessibleTrips, openTripRoute, editTripRoute,
+    (access) => navigate(tripSettingsPath(access.trip.slug)));
 }
 
 async function reloadBootstrapData() {
@@ -129,6 +133,8 @@ async function authorize(user) {
 async function openTrip(access) {
   const trip = access.trip;
   if (!trip) return;
+  const requestingUser = state.currentUser;
+  const requestedPath = currentRoute().path;
 
   hideTripManager();
   setStatus($('tripGateStatus'), 'Cargando viaje…');
@@ -146,6 +152,7 @@ async function openTrip(access) {
     return;
   }
 
+  if (!state.currentProfile || state.currentUser !== requestingUser || currentRoute().path !== requestedPath) return;
   state.currentTrip = trip;
   state.currentMembership = access.membership ? { ...access.membership, permissions } : null;
   $('authGate').classList.add('hidden');
@@ -153,6 +160,7 @@ async function openTrip(access) {
   renderTripShell(settings, {
     onOpenDetails: () => state.privateModal.show(),
     onChangeTrip: changeTrip,
+    onConfigure: permissions.includes('trip.edit') ? () => navigate(tripSettingsPath(trip.slug)) : null,
   });
   $('tripShell').classList.add('visible');
   $('privateTripTitle').textContent = `✨ ${trip.name}`;
@@ -187,7 +195,41 @@ async function handleTripDeleted() {
 }
 
 async function applyRoute(route) {
+  hideTripSettings();
   if (!state.currentProfile) return;
+  if (state.currentProfile.mustChangePassword) return;
+
+  if (route.name === 'trip-settings') {
+    hideTripManager();
+    if (state.privateModal) state.privateModal.hide();
+    if (state.userManagerModal) state.userManagerModal.hide();
+    const access = state.accessibleTrips.find((item) => item.trip?.slug === route.slug);
+    if (!access || !(access.permissions || []).includes('trip.edit')) {
+      refreshTripPicker();
+      showTripPicker();
+      setStatus($('tripGateStatus'), 'No tenés permiso para configurar este viaje.', 'error');
+      return;
+    }
+    const requestingUser = state.currentUser;
+    const isCurrent = () => state.currentProfile && state.currentUser === requestingUser && currentRoute().path === route.path;
+    showTripPicker();
+    setStatus($('tripGateStatus'), 'Cargando configuración…');
+    try {
+      const result = await tripApi('trip-detail', { slug: route.slug });
+      if (!isCurrent()) return;
+      if (!(result.permissions || []).includes('trip.edit')) {
+        setStatus($('tripGateStatus'), 'No tenés permiso para configurar este viaje.', 'error');
+        return;
+      }
+      hideTripPicker();
+      showTripSettings(access.trip, result.settings);
+    } catch (error) {
+      if (isCurrent() && error.message !== 'SESSION_EXPIRED') {
+        setStatus($('tripGateStatus'), error.message || 'No se pudo cargar la configuración.', 'error');
+      }
+    }
+    return;
+  }
 
   if (route.name === 'not-found') {
     navigate('/', { replace: true });
@@ -266,6 +308,7 @@ async function applyRoute(route) {
 }
 
 async function logout() {
+  hideTripSettings();
   if (state.privateModal) state.privateModal.hide();
   if (state.userManagerModal) state.userManagerModal.hide();
   hideTripManager();
@@ -301,6 +344,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     onCancel: () => navigate('/'),
     onSaved: handleTripSaved,
     onDeleted: handleTripDeleted,
+  });
+  bindTripSettings({
+    onCancel: (trip) => navigate(tripPath(trip.slug)),
+    onSaved: (trip) => navigate(tripPath(trip.slug), { replace: true }),
+    onLogout: logout,
   });
   bindUserManager({ onOpen: () => navigate('/users') });
   bindNavigation();

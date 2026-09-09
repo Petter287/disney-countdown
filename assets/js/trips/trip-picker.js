@@ -5,7 +5,7 @@ function displayName(profile) {
   return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
 }
 
-export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTrip) {
+export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTrip, onConfigureTrip) {
   $('tripGreeting').textContent = `Hola, ${displayName(profile)} 👋`;
   $('systemOwnerActions').classList.toggle('visible', profile?.systemOwner === true);
   $('tripList').replaceChildren();
@@ -56,6 +56,15 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTri
       edit.textContent = '✏️ Editar viaje';
       edit.addEventListener('click', () => onEditTrip(access));
       wrapper.append(edit);
+    }
+
+    if ((access.permissions || []).includes('trip.edit') && onConfigureTrip) {
+      const configure = document.createElement('button');
+      configure.type = 'button';
+      configure.className = 'btn btn-outline-light btn-sm';
+      configure.textContent = 'Configurar apariencia';
+      configure.addEventListener('click', () => onConfigureTrip(access));
+      wrapper.append(configure);
     }
 
     col.append(wrapper);

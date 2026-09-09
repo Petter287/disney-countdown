@@ -1,5 +1,6 @@
 import { $ } from './dom.js';
 import { state } from '../state.js';
+import { hideTripSettings } from '../trips/trip-settings.js';
 
 const EMPTY_SYSTEM_DATA = () => ({ users: [], trips: [], roles: [] });
 
@@ -18,6 +19,7 @@ function resetForm(id) {
 }
 
 export function purgePrivateSessionData() {
+  hideTripSettings();
   clearInterval(state.countdownTimer);
 
   state.currentUser = null;
@@ -38,7 +40,6 @@ export function purgePrivateSessionData() {
   clearChildren('tripMemberRole');
   clearChildren('systemUserList');
   clearChildren('systemUserAssignments');
-  clearChildren('tripCrudBackgroundPreview');
 
   clearText('tripGreeting');
   clearText('privateTripTitle');
@@ -58,8 +59,6 @@ export function purgePrivateSessionData() {
   const tripManagerGate = $('tripManagerGate');
   tripManagerGate?.classList.remove('visible');
   tripManagerGate?.setAttribute('aria-hidden', 'true');
-  $('tripCrudBackgroundPreview')?.classList.add('d-none');
-  $('tripCrudRemoveBackgroundGroup')?.classList.add('d-none');
 
   $('adminPanel')?.classList.remove('visible');
   $('systemOwnerActions')?.classList.remove('visible');

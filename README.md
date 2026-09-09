@@ -13,7 +13,8 @@ El proyecto nació como una cuenta regresiva para un viaje a Disney y evolucion�
 - 🎟️ Participantes y roles independientes por viaje.
 - 🛡️ Roles `admin`, `editor` y `viewer` con permisos diferenciados.
 - ⏳ Cuenta regresiva configurable por viaje.
-- 🕐 Ajuste de la fecha objetivo según ubicación y zona horaria cuando corresponde.
+- 🕐 Cuenta regresiva al inicio del viaje, a medianoche en la zona horaria del destino.
+- 🎨 Configuración de encabezado, título, subtítulo, fondo y crédito, con vista previa.
 - 🚫 Posibilidad de habilitar o deshabilitar globalmente el acceso de un usuario sin eliminar sus viajes.
 
 ## Arquitectura
@@ -82,6 +83,30 @@ Los permisos se dividen en dos niveles:
 - GitHub Pages
 
 ## Desarrollo local
+
+### Configuración visual del viaje
+
+La ruta `/#/trips/:slug/settings` se abre desde **Configurar apariencia** en el selector o en la pantalla del viaje. Requiere el permiso efectivo `trip.edit` (admin, editor o System Owner, incluso sin membresía). Un viewer no puede guardar cambios.
+
+La imagen se administra únicamente desde **Configurar apariencia**. Crear y editar viajes contiene los datos generales, el destino y las fechas. Los viajes nuevos comienzan con fondo neutro; editar sus datos generales conserva la imagen existente.
+
+El título es obligatorio (hasta 200 caracteres); encabezado (160), subtítulo (500) y crédito (300) son opcionales. El fondo admite JPG, PNG y WebP de hasta 4 MB, con validación de firma en backend, Storage privado y URLs temporales. Se puede reemplazar o quitar. Guardar vuelve al viaje y recarga su configuración; volver sin guardar descarta los cambios.
+
+`trip-settings-update` valida la sesión activa y el permiso del viaje, y actualiza únicamente los campos visuales. `updatedAt` detecta ediciones simultáneas y responde 409 si la configuración cambió desde que se abrió el formulario. No modifica fechas, timezone, membresías ni datos generales del viaje.
+
+El código de `trip-api` está versionado en `supabase/functions/trip-api/index.ts`, con `verify_jwt = true` en `supabase/config.toml`. Esta feature no requiere una migración de base de datos. El backend debe desplegarse antes de publicar el frontend; la acción nueva y el campo `updatedAt` son compatibles con el frontend anterior.
+
+### Validación
+
+Las pruebas de API usan el handler real con un cliente Supabase simulado; no escriben datos de producción. Requieren Node con `node:module.stripTypeScriptTypes`:
+
+```bash
+node --input-type=module -e "import('./tests/trip-settings-api.mjs').then(async t => console.log(await t.runTests()))"
+```
+
+`tests/trip-settings-ui.mjs` exporta `runBrowserTests(browser, baseUrl)` para Playwright. Usa sesiones y respuestas simuladas, prueba edición, permisos, cancelación, imágenes, cierre de sesión y expiración. Necesita un servidor HTTP local y las dependencias de CDN copiadas en `tmp/`: `bootstrap.min.css`, `bootstrap.bundle.min.js` (5.3.8), `country-state-city.js` (3.2.1, endpoint `+esm`) y `tz-lookup.js` (6.1.25, endpoint `+esm`). Las capturas se guardan en `tmp/`.
+
+### Servidor local
 
 Al utilizar módulos ES, conviene servir el proyecto mediante un servidor HTTP local en lugar de abrir `index.html` directamente.
 
