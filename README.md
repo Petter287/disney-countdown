@@ -41,9 +41,25 @@ El frontend no accede directamente a las tablas privadas. Supabase JS se utiliza
 
 El nuevo frontend se desarrolla de forma incremental en `frontend/` con **React + TypeScript + Vite**. La aplicación legacy de la raíz se mantiene intacta y publicada mientras se migra pantalla por pantalla.
 
+La rama base de esta migración es `refactor/react-typescript-foundation`. Las features de esta nueva arquitectura se crean a partir de esa rama en lugar de `main`.
+
 La nueva carcasa usa `HashRouter` y assets relativos para seguir siendo compatible con GitHub Pages sin pagar hosting. La capa `frontend/src/shared/api` establece una frontera de transporte para no acoplar los componentes al backend actual.
 
 La decisión detallada y el orden de migración están documentados en `docs/architecture/react-migration.md`.
+
+### Auth y shell de sesión React
+
+La rama `feature/react-auth-shell` agrega al frontend nuevo:
+
+- Supabase Auth.
+- Restauración y renovación de sesión.
+- Validación del perfil mediante `trip-api` / `bootstrap`.
+- Login y logout.
+- Rutas privadas mediante `ProtectedRoute`.
+- Cambio obligatorio de contraseña reutilizando `manage-system-user`.
+- Shell autenticado con perfil y badge de `System Owner`.
+
+Mientras se mantenga GitHub Pages como hosting gratuito, la sesión permanece gestionada por Supabase en el navegador. Una futura migración a cookies HttpOnly con BFF queda fuera de esta etapa.
 
 ### Probar el frontend React localmente
 
@@ -53,15 +69,17 @@ Requisitos:
 - npm (incluido con Node.js).
 - Git.
 
-Desde la raíz del repositorio:
+Para probar la feature de autenticación:
 
 ```bash
+git fetch
+git switch feature/react-auth-shell
 cd frontend
 npm install
 npm run dev
 ```
 
-Abrí `http://localhost:5173/`. En esta primera etapa vas a ver la carcasa de migración y las rutas preparadas; todavía no usa datos reales ni reemplaza el frontend legacy.
+Abrí `http://localhost:5173/`. El login ya usa las cuentas reales de Supabase; las pantallas de viajes todavía son placeholders protegidos.
 
 Validaciones disponibles:
 
@@ -72,7 +90,9 @@ npm run build
 npm run preview
 ```
 
-`npm run build` genera `frontend/dist/`, compatible con publicación estática. `npm run preview` sirve ese build en `http://localhost:4173/`.
+`frontend/.env.example` documenta la configuración pública de Supabase. Los valores actuales tienen fallback para facilitar desarrollo local. Nunca deben agregarse `service_role`, secret keys ni otras credenciales privilegiadas al frontend.
+
+Más detalle en `docs/architecture/react-auth.md`.
 
 ### Probar la aplicación legacy localmente
 
