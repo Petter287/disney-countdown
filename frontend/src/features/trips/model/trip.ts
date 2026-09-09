@@ -74,3 +74,24 @@ export interface TripMutationResponse {
   ok: true;
   trip: Trip;
 }
+
+export interface TripBackgroundImageInput {
+  contentBase64: string;
+  contentType: string;
+}
+
+export interface TripSettingsUpdateInput {
+  slug: string;
+  updatedAt: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  photoCredit: string;
+  removeBackground: boolean;
+  backgroundImage?: TripBackgroundImageInput;
+}
+
+export interface TripSettingsUpdateResponse {
+  ok: true;
+  trip: Pick<Trip, 'id' | 'slug'>;
+}

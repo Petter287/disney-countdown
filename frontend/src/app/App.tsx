@@ -3,6 +3,7 @@ import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RootRedirect } from '../features/auth/RootRedirect';
 import { SessionShell } from '../features/auth/SessionShell';
 import { SystemOwnerRoute } from '../features/auth/SystemOwnerRoute';
+import { TripPermissionRoute } from '../features/trips/TripPermissionRoute';
 import { TripsProvider } from '../features/trips/TripsProvider';
 import { AuthenticatedPlaceholderPage } from '../pages/AuthenticatedPlaceholderPage';
 import { ChangePasswordPage } from '../pages/ChangePasswordPage';
@@ -10,6 +11,7 @@ import { LoginPage } from '../pages/LoginPage';
 import { TripCreatePage } from '../pages/TripCreatePage';
 import { TripDetailPage } from '../pages/TripDetailPage';
 import { TripEditPage } from '../pages/TripEditPage';
+import { TripSettingsPage } from '../pages/TripSettingsPage';
 import { TripsPage } from '../pages/TripsPage';
 
 export function App() {
@@ -28,7 +30,9 @@ export function App() {
               <Route path="/trips/:slug/edit" element={<TripEditPage />} />
             </Route>
             <Route path="/trips/:slug" element={<TripDetailPage />} />
-            <Route path="/trips/:slug/settings" element={<AuthenticatedPlaceholderPage title="Apariencia del viaje" />} />
+            <Route element={<TripPermissionRoute permission="trip.edit" />}>
+              <Route path="/trips/:slug/settings" element={<TripSettingsPage />} />
+            </Route>
             <Route path="/trips/:slug/participants" element={<AuthenticatedPlaceholderPage title="Participantes" />} />
           </Route>
           <Route path="/users" element={<AuthenticatedPlaceholderPage title="Usuarios del sistema" />} />

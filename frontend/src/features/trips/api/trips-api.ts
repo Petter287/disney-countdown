@@ -6,6 +6,8 @@ import type {
   TripMembership,
   TripMutationInput,
   TripMutationResponse,
+  TripSettingsUpdateInput,
+  TripSettingsUpdateResponse,
 } from '../model/trip';
 
 export interface TripsBootstrap {
@@ -56,5 +58,12 @@ export async function deleteTrip(slug: string): Promise<{ ok: true }> {
   return callProtectedFunction<{ ok: true }>('trip-api', {
     action: 'trip-delete',
     slug,
+  });
+}
+
+export async function updateTripSettings(input: TripSettingsUpdateInput): Promise<TripSettingsUpdateResponse> {
+  return callProtectedFunction<TripSettingsUpdateResponse>('trip-api', {
+    action: 'trip-settings-update',
+    ...input,
   });
 }
