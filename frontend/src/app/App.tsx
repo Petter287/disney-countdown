@@ -1,19 +1,30 @@
 import { Route, Routes } from 'react-router-dom';
-import { FoundationPage } from '../pages/FoundationPage';
-import { MigrationPlaceholderPage } from '../pages/MigrationPlaceholderPage';
+import { ProtectedRoute } from '../features/auth/ProtectedRoute';
+import { RootRedirect } from '../features/auth/RootRedirect';
+import { SessionShell } from '../features/auth/SessionShell';
+import { AuthenticatedPlaceholderPage } from '../pages/AuthenticatedPlaceholderPage';
+import { ChangePasswordPage } from '../pages/ChangePasswordPage';
+import { LoginPage } from '../pages/LoginPage';
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<FoundationPage />} />
-      <Route path="/login" element={<MigrationPlaceholderPage title="Autenticación" />} />
-      <Route path="/trips" element={<MigrationPlaceholderPage title="Mis viajes" />} />
-      <Route path="/trips/:slug" element={<MigrationPlaceholderPage title="Detalle del viaje" />} />
-      <Route path="/trips/:slug/edit" element={<MigrationPlaceholderPage title="Editar viaje" />} />
-      <Route path="/trips/:slug/settings" element={<MigrationPlaceholderPage title="Apariencia del viaje" />} />
-      <Route path="/trips/:slug/participants" element={<MigrationPlaceholderPage title="Participantes" />} />
-      <Route path="/users" element={<MigrationPlaceholderPage title="Usuarios del sistema" />} />
-      <Route path="*" element={<FoundationPage />} />
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/change-password" element={<ChangePasswordPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<SessionShell />}>
+          <Route path="/trips" element={<AuthenticatedPlaceholderPage title="Mis viajes" />} />
+          <Route path="/trips/:slug" element={<AuthenticatedPlaceholderPage title="Detalle del viaje" />} />
+          <Route path="/trips/:slug/edit" element={<AuthenticatedPlaceholderPage title="Editar viaje" />} />
+          <Route path="/trips/:slug/settings" element={<AuthenticatedPlaceholderPage title="Apariencia del viaje" />} />
+          <Route path="/trips/:slug/participants" element={<AuthenticatedPlaceholderPage title="Participantes" />} />
+          <Route path="/users" element={<AuthenticatedPlaceholderPage title="Usuarios del sistema" />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<RootRedirect />} />
     </Routes>
   );
 }
