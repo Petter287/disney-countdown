@@ -12,6 +12,7 @@
   <link href="assets/css/styles.css" rel="stylesheet">
   <link href="assets/css/system-users.css" rel="stylesheet">
   <link href="assets/css/trip-settings.css" rel="stylesheet">
+  <link href="assets/css/trip-participants.css" rel="stylesheet">
 </head>
 <body>
   <div id="authGate" class="auth-gate">
@@ -60,26 +61,6 @@
         <div class="modal-body p-4">
           <p class="trip-muted">Área privada del viaje seleccionado. Tu rol y permisos pertenecen únicamente a este viaje.</p>
           <div class="row g-3"><div class="col-md-6"><div class="private-tile p-3"><strong>✈️ Vuelos</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏨 Hoteles</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🏰 Disney</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🎢 Universal</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🍽️ Reservas</strong><div class="small trip-muted">Próximamente</div></div></div><div class="col-md-6"><div class="private-tile p-3"><strong>🗓️ Itinerario</strong><div class="small trip-muted">Próximamente</div></div></div></div>
-
-          <section id="adminPanel" class="admin-panel border-top border-secondary mt-4 pt-4">
-            <h3 class="h5 fw-bold">👥 Participantes del viaje</h3>
-            <p class="trip-muted small">Los administradores del viaje solo pueden agregar usuarios que ya existen y tienen acceso activo al sistema.</p>
-            <form id="tripMemberForm" autocomplete="off">
-              <div class="row g-3 align-items-end">
-                <div class="col-lg-9">
-                  <label class="form-label">Usuarios disponibles</label>
-                  <div id="availableUsersList" class="available-users"></div>
-                </div>
-                <div class="col-lg-3">
-                  <label for="tripMemberRole" class="form-label">Rol para seleccionados</label>
-                  <select id="tripMemberRole" class="form-select" required></select>
-                  <button class="btn btn-trip w-100 mt-3" type="submit">Agregar al viaje</button>
-                </div>
-              </div>
-            </form>
-            <div id="tripMemberStatus" class="small mt-2 trip-muted" aria-live="polite"></div>
-            <div id="members" class="d-grid gap-2 mt-3"></div>
-          </section>
         </div>
         <div class="modal-footer border-secondary d-flex gap-2"><button id="changeTripButton" class="btn btn-outline-info flex-fill" type="button">Cambiar viaje</button><button id="logoutButton" class="btn btn-outline-light flex-fill" type="button">Cerrar sesión</button></div>
       </div>
