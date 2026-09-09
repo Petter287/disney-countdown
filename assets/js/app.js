@@ -1,12 +1,12 @@
 import { secureSignOut, supabase, tripApi } from './api.js';
 import { bindAuth } from './auth/auth.js';
-import { bindRouter, currentRoute, navigate, tripEditPath, tripPath, tripSettingsPath } from './router.js';
+import { bindRouter, currentRoute, navigate, tripEditPath, tripParticipantsPath, tripPath, tripSettingsPath } from './router.js';
 import { $, setStatus } from './shared/dom.js';
 import { purgePrivateSessionData } from './shared/session-security.js';
 import { state } from './state.js';
 import { startCountdown, stopCountdown } from './trips/countdown.js';
-import { bindTripAdminForm, loadTripAdminData } from './trips/trip-admin.js';
 import { bindTripManager, hideTripManager, showTripManager } from './trips/trip-manager.js';
+import { bindTripParticipants, hideTripParticipants, showTripParticipants } from './trips/trip-participants.js';
 import { renderTripPicker } from './trips/trip-picker.js';
 import { renderTripShell } from './trips/trip-view.js';
 import { bindTripSettings, hideTripSettings, showTripSettings } from './trips/trip-settings.js';
@@ -22,14 +22,11 @@ function clearTripUi() {
   $('tripShell').classList.remove('visible');
   $('tripShell').setAttribute('aria-hidden', 'true');
   $('tripShell').style.removeProperty('--trip-background-image');
-  $('adminPanel').classList.remove('visible');
-  $('members').replaceChildren();
-  $('availableUsersList').replaceChildren();
-  setStatus($('tripMemberStatus'));
 }
 
 function showLogin(message = '', type = '') {
   hideTripSettings();
+  hideTripParticipants();
   hideTripManager();
   clearTripUi();
   $('tripGate').classList.remove('visible');
@@ -42,6 +39,7 @@ function showLogin(message = '', type = '') {
 
 function showTripPicker() {
   hideTripSettings();
+  hideTripParticipants();
   hideTripManager();
   clearTripUi();
   $('authGate').classList.add('hidden');
@@ -67,8 +65,14 @@ function editTripRoute(access) {
 }
 
 function refreshTripPicker() {
-  renderTripPicker(state.currentProfile, state.accessibleTrips, openTripRoute, editTripRoute,
-    (access) => navigate(tripSettingsPath(access.trip.slug)));
+  renderTripPicker(
+    state.currentProfile,
+    state.accessibleTrips,
+    openTripRoute,
+    editTripRoute,
+    (access) => navigate(tripSettingsPath(access.trip.slug)),
+    (access) => navigate(tripParticipantsPath(access.trip.slug)),
+  );
 }
 
 async function reloadBootstrapData() {
@@ -88,6 +92,8 @@ async function handleExpiredSession() {
 
   if (state.privateModal) state.privateModal.hide();
   if (state.userManagerModal) state.userManagerModal.hide();
+  hideTripSettings();
+  hideTripParticipants();
   hideTripManager();
   purgePrivateSessionData();
   navigate('/', { replace: true });
@@ -137,6 +143,7 @@ async function openTrip(access) {
   const requestedPath = currentRoute().path;
 
   hideTripManager();
+  hideTripParticipants();
   setStatus($('tripGateStatus'), 'Cargando viaje…');
   let settings;
   let permissions = access.permissions || [];
@@ -161,15 +168,12 @@ async function openTrip(access) {
     onOpenDetails: () => state.privateModal.show(),
     onChangeTrip: changeTrip,
     onConfigure: permissions.includes('trip.edit') ? () => navigate(tripSettingsPath(trip.slug)) : null,
+    onManageParticipants: permissions.includes('members.manage') ? () => navigate(tripParticipantsPath(trip.slug)) : null,
   });
   $('tripShell').classList.add('visible');
   $('privateTripTitle').textContent = `✨ ${trip.name}`;
   const accessLabel = access.membership?.role?.name || (state.currentProfile.systemOwner ? 'System Owner' : 'Sin rol');
   $('userLine').textContent = `${state.currentProfile.email} · ${accessLabel}`;
-
-  const canManageMembers = permissions.includes('members.manage');
-  $('adminPanel').classList.toggle('visible', canManageMembers);
-  if (canManageMembers) await loadTripAdminData();
   startCountdown(settings);
 }
 
@@ -196,8 +200,29 @@ async function handleTripDeleted() {
 
 async function applyRoute(route) {
   hideTripSettings();
+  hideTripParticipants();
   if (!state.currentProfile) return;
   if (state.currentProfile.mustChangePassword) return;
+
+  if (route.name === 'trip-participants') {
+    hideTripManager();
+    if (state.privateModal) state.privateModal.hide();
+    if (state.userManagerModal) state.userManagerModal.hide();
+
+    const access = state.accessibleTrips.find((item) => item.trip?.slug === route.slug);
+    if (!access || !(access.permissions || []).includes('members.manage')) {
+      refreshTripPicker();
+      showTripPicker();
+      setStatus($('tripGateStatus'), 'No tenés permiso para gestionar los participantes de este viaje.', 'error');
+      return;
+    }
+
+    clearTripUi();
+    $('authGate').classList.add('hidden');
+    hideTripPicker();
+    showTripParticipants(access.trip);
+    return;
+  }
 
   if (route.name === 'trip-settings') {
     hideTripManager();
@@ -309,6 +334,7 @@ async function applyRoute(route) {
 
 async function logout() {
   hideTripSettings();
+  hideTripParticipants();
   if (state.privateModal) state.privateModal.hide();
   if (state.userManagerModal) state.userManagerModal.hide();
   hideTripManager();
@@ -338,7 +364,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   bindRouter(applyRoute);
   bindAuth({ authorize, showLogin });
-  bindTripAdminForm();
   bindTripManager({
     onNew: () => navigate('/trips/new'),
     onCancel: () => navigate('/'),
@@ -348,6 +373,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindTripSettings({
     onCancel: (trip) => navigate(tripPath(trip.slug)),
     onSaved: (trip) => navigate(tripPath(trip.slug), { replace: true }),
+    onLogout: logout,
+  });
+  bindTripParticipants({
+    onBack: (trip) => navigate(tripPath(trip.slug)),
     onLogout: logout,
   });
   bindUserManager({ onOpen: () => navigate('/users') });
