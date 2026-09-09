@@ -6,6 +6,7 @@ import { AuthProvider } from './features/auth/AuthProvider';
 import './styles/global.css';
 import './styles/trip-crud.css';
 import './styles/trip-settings.css';
+import './styles/trip-participants.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
