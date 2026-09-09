@@ -15,6 +15,7 @@ El proyecto nació como una cuenta regresiva para un viaje a Disney y evolucion�
 - ⏳ Cuenta regresiva configurable por viaje.
 - 🕐 Cuenta regresiva al inicio del viaje, a medianoche en la zona horaria del destino.
 - 🎨 Configuración de encabezado, título, subtítulo, fondo y crédito, con vista previa.
+- 👥 Pantalla dedicada para administrar participantes de cada viaje.
 - 🚫 Posibilidad de habilitar o deshabilitar globalmente el acceso de un usuario sin eliminar sus viajes.
 
 ## Arquitectura
@@ -94,7 +95,24 @@ El título es obligatorio (hasta 200 caracteres); encabezado (160), subtítulo (
 
 `trip-settings-update` valida la sesión activa y el permiso del viaje, y actualiza únicamente los campos visuales. `updatedAt` detecta ediciones simultáneas y responde 409 si la configuración cambió desde que se abrió el formulario. No modifica fechas, timezone, membresías ni datos generales del viaje.
 
-El código de `trip-api` está versionado en `supabase/functions/trip-api/index.ts`, con `verify_jwt = true` en `supabase/config.toml`. Esta feature no requiere una migración de base de datos. El backend debe desplegarse antes de publicar el frontend; la acción nueva y el campo `updatedAt` son compatibles con el frontend anterior.
+### Participantes del viaje
+
+La ruta `/#/trips/:slug/participants` concentra la administración de participantes y reemplaza la edición que antes estaba embebida dentro del modal **Mi viaje**. Se puede abrir desde el selector de viajes o desde la pantalla principal del viaje.
+
+La pantalla requiere el permiso efectivo `members.manage`, por lo que está disponible para administradores del viaje y para el System Owner. Editores y viewers no pueden abrirla ni ejecutar sus acciones. El backend vuelve a validar el mismo permiso en `trip-api`.
+
+Desde esta pantalla se puede:
+
+- ver participantes actuales y su estado de acceso global;
+- identificar al propietario del viaje, que no puede ser modificado ni removido;
+- cambiar el rol de participantes no propietarios;
+- quitar participantes;
+- agregar uno o varios usuarios existentes y activos con un rol común;
+- ver un resumen de participantes totales, activos y usuarios disponibles para agregar.
+
+Los usuarios con acceso global deshabilitado permanecen visibles como miembros existentes, pero solo usuarios globalmente activos aparecen como candidatos para agregar.
+
+El código de `trip-api` está versionado en `supabase/functions/trip-api/index.ts`, con `verify_jwt = true` en `supabase/config.toml`. La pantalla dedicada de participantes reutiliza las acciones existentes `trip-admin`, `assign`, `update-role` y `remove`, por lo que no requiere migración ni un contrato nuevo de backend.
 
 ### Validación
 
@@ -104,7 +122,11 @@ Las pruebas de API usan el handler real con un cliente Supabase simulado; no esc
 node --input-type=module -e "import('./tests/trip-settings-api.mjs').then(async t => console.log(await t.runTests()))"
 ```
 
-`tests/trip-settings-ui.mjs` exporta `runBrowserTests(browser, baseUrl)` para Playwright. Usa sesiones y respuestas simuladas, prueba edición, permisos, cancelación, imágenes, cierre de sesión y expiración. Necesita un servidor HTTP local y las dependencias de CDN copiadas en `tmp/`: `bootstrap.min.css`, `bootstrap.bundle.min.js` (5.3.8), `country-state-city.js` (3.2.1, endpoint `+esm`) y `tz-lookup.js` (6.1.25, endpoint `+esm`). Las capturas se guardan en `tmp/`.
+`tests/trip-settings-ui.mjs` exporta `runBrowserTests(browser, baseUrl)` para Playwright. Usa sesiones y respuestas simuladas, prueba edición, permisos, cancelación, imágenes, cierre de sesión y expiración.
+
+`tests/trip-participants-ui.mjs` cubre la ruta dedicada de participantes, permisos, protección del propietario, alta, cambio de rol, baja, renderizado seguro de nombres, layout móvil, acceso del System Owner y limpieza por expiración de sesión.
+
+Los tests de navegador necesitan un servidor HTTP local y las dependencias de CDN copiadas en `tmp/`: `bootstrap.min.css`, `bootstrap.bundle.min.js` (5.3.8), `country-state-city.js` (3.2.1, endpoint `+esm`) y `tz-lookup.js` (6.1.25, endpoint `+esm`).
 
 ### Servidor local
 
