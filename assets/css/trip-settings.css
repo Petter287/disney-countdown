@@ -1,0 +1,13 @@
+.trip-settings-preview {
+  --trip-background-image: radial-gradient(circle at top, #244d86, #07152f 75%);
+  background-image: linear-gradient(rgba(3, 12, 29, .38), rgba(3, 12, 29, .52)), var(--trip-background-image);
+  background-size: cover;
+  background-position: center;
+  border-radius: 1.25rem;
+  overflow-wrap: anywhere;
+}
+#tripSettingsGate { align-items: start; }
+#tripSettingsGate > section { margin: auto; }
+#tripSettingsPreviewSubtitle { white-space: pre-wrap; }
+.trip-title, .eyebrow, #tripSubtitle, .photo-credit { overflow-wrap: anywhere; }
+#tripSubtitle { white-space: pre-wrap; }

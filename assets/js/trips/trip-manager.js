@@ -3,12 +3,8 @@ import { $, setStatus } from '../shared/dom.js';
 import { COUNTRY_CODES, countryOptions, inferTimezone, regionOptions } from '../shared/geography.js';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
 let activeTrip = null;
-let activeSettings = null;
-let objectPreviewUrl = null;
 let onSaved = null;
 let onDeleted = null;
 let onCancel = null;
@@ -85,16 +81,7 @@ function ensureUi() {
             <div class="invalid-feedback">La fecha de fin no puede ser anterior al inicio.</div>
           </div>
 
-          <div class="col-12">
-            <label for="tripCrudBackground" class="form-label">Imagen de fondo</label>
-            <input id="tripCrudBackground" class="form-control" type="file" accept="image/jpeg,image/png,image/webp">
-            <div class="form-text text-light opacity-75">JPG, PNG o WebP. Máximo 4 MB. Si no cargás una imagen, se usa un fondo neutro.</div>
-            <div id="tripCrudBackgroundPreview" class="mt-3 d-none"></div>
-            <div id="tripCrudRemoveBackgroundGroup" class="form-check mt-2 d-none">
-              <input id="tripCrudRemoveBackground" class="form-check-input" type="checkbox">
-              <label for="tripCrudRemoveBackground" class="form-check-label">Quitar la imagen actual</label>
-            </div>
-          </div>
+
         </div>
         <div id="tripCrudStatus" class="small mt-3 trip-muted" aria-live="polite"></div>
         <div class="d-flex flex-column flex-sm-row gap-2 mt-4">
@@ -150,65 +137,6 @@ function populateRegions(countryCode, selectedRegion = '') {
   select.value = regions.some((region) => region.code === selectedRegion) ? selectedRegion : '';
 }
 
-function clearPreviewObjectUrl() {
-  if (!objectPreviewUrl) return;
-  URL.revokeObjectURL(objectPreviewUrl);
-  objectPreviewUrl = null;
-}
-
-function renderBackgroundPreview(url = '') {
-  clearPreviewObjectUrl();
-  const preview = $('tripCrudBackgroundPreview');
-  preview.replaceChildren();
-  preview.classList.toggle('d-none', !url);
-  if (!url) return;
-
-  const image = document.createElement('img');
-  image.src = url;
-  image.alt = 'Vista previa del fondo del viaje';
-  image.className = 'trip-background-preview';
-  preview.append(image);
-}
-
-function renderSelectedFile(file) {
-  if (!file) {
-    renderBackgroundPreview(activeSettings?.backgroundUrl || '');
-    return;
-  }
-  clearPreviewObjectUrl();
-  objectPreviewUrl = URL.createObjectURL(file);
-  const preview = $('tripCrudBackgroundPreview');
-  preview.replaceChildren();
-  preview.classList.remove('d-none');
-  const image = document.createElement('img');
-  image.src = objectPreviewUrl;
-  image.alt = 'Vista previa del nuevo fondo del viaje';
-  image.className = 'trip-background-preview';
-  preview.append(image);
-}
-
-function validateImage(file) {
-  if (!file) return null;
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) return 'La imagen debe ser JPG, PNG o WebP.';
-  if (file.size > MAX_IMAGE_BYTES) return 'La imagen no puede superar los 4 MB.';
-  if (!file.size) return 'La imagen está vacía.';
-  return null;
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
-    reader.onload = () => {
-      const value = String(reader.result || '');
-      const comma = value.indexOf(',');
-      if (comma < 0) return reject(new Error('No se pudo procesar la imagen seleccionada.'));
-      resolve(value.slice(comma + 1));
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function setBusy(isBusy) {
   $('tripCrudSave').disabled = isBusy;
   $('tripCrudDelete').disabled = isBusy;
@@ -228,7 +156,6 @@ function validateForm() {
   const destination = $('tripCrudDestination').value.trim();
   const startsOn = $('tripCrudStartsOn').value;
   const endsOn = $('tripCrudEndsOn').value || null;
-  const file = $('tripCrudBackground').files?.[0] || null;
   const defaultTimezone = inferTimezone(countryCode, regionCode);
 
   $('tripCrudSlug').value = slug;
@@ -242,9 +169,6 @@ function validateForm() {
   if (!form.checkValidity()) return { error: 'Revisá los campos marcados antes de guardar.' };
   if (!defaultTimezone) return { error: 'No se pudo determinar automáticamente la hora local del destino.' };
 
-  const imageError = validateImage(file);
-  if (imageError) return { error: imageError };
-
   return {
     value: {
       slug,
@@ -255,8 +179,6 @@ function validateForm() {
       defaultTimezone,
       startsOn,
       endsOn,
-      file,
-      removeBackground: $('tripCrudRemoveBackground').checked,
     },
   };
 }
@@ -264,7 +186,6 @@ function validateForm() {
 export function hideTripManager() {
   const gate = $('tripManagerGate');
   if (!gate) return;
-  clearPreviewObjectUrl();
   gate.classList.remove('visible');
   gate.setAttribute('aria-hidden', 'true');
 }
@@ -272,7 +193,6 @@ export function hideTripManager() {
 export function showTripManager(data = null) {
   ensureUi();
   activeTrip = data?.trip || null;
-  activeSettings = data?.settings || null;
   const editing = Boolean(activeTrip);
 
   const form = $('tripCrudForm');
@@ -280,7 +200,7 @@ export function showTripManager(data = null) {
   form.classList.remove('was-validated');
   $('tripCrudTitle').textContent = editing ? 'Editar viaje' : 'Nuevo viaje';
   $('tripCrudIntro').textContent = editing
-    ? 'Actualizá los datos generales, el destino y el fondo del viaje.'
+    ? 'Actualizá los datos generales, el destino y las fechas del viaje.'
     : 'Elegí el país y, si querés, la provincia/estado y ciudad. La hora local se calcula automáticamente.';
 
   $('tripCrudSlug').value = activeTrip?.slug || '';
@@ -292,10 +212,6 @@ export function showTripManager(data = null) {
   $('tripCrudEndsOn').value = activeTrip?.endsOn || '';
   $('tripCrudDelete').classList.toggle('d-none', !editing);
 
-  const hasBackground = Boolean(activeSettings?.backgroundUrl);
-  $('tripCrudRemoveBackgroundGroup').classList.toggle('d-none', !hasBackground);
-  $('tripCrudRemoveBackground').checked = false;
-  renderBackgroundPreview(activeSettings?.backgroundUrl || '');
   setStatus($('tripCrudStatus'));
 
   $('tripManagerGate').classList.add('visible');
@@ -317,28 +233,6 @@ export function bindTripManager(callbacks = {}) {
   $('tripCrudCountry').addEventListener('change', () => {
     populateRegions($('tripCrudCountry').value);
   });
-  $('tripCrudBackground').addEventListener('change', () => {
-    const file = $('tripCrudBackground').files?.[0] || null;
-    const error = validateImage(file);
-    if (error) {
-      $('tripCrudBackground').value = '';
-      renderSelectedFile(null);
-      setStatus($('tripCrudStatus'), error, 'error');
-      return;
-    }
-    if (file) $('tripCrudRemoveBackground').checked = false;
-    renderSelectedFile(file);
-    setStatus($('tripCrudStatus'));
-  });
-  $('tripCrudRemoveBackground').addEventListener('change', () => {
-    if ($('tripCrudRemoveBackground').checked) {
-      $('tripCrudBackground').value = '';
-      renderBackgroundPreview('');
-    } else {
-      renderBackgroundPreview(activeSettings?.backgroundUrl || '');
-    }
-  });
-
   $('tripCrudForm').addEventListener('submit', async (event) => {
     event.preventDefault();
 
@@ -348,14 +242,7 @@ export function bindTripManager(callbacks = {}) {
     setBusy(true);
     setStatus($('tripCrudStatus'), activeTrip ? 'Guardando cambios…' : 'Creando viaje…');
     try {
-      const { file, ...payload } = validation.value;
-      if (file) {
-        payload.backgroundImage = {
-          contentBase64: await fileToBase64(file),
-          contentType: file.type,
-          originalName: file.name,
-        };
-      }
+      const payload = validation.value;
 
       const result = activeTrip
         ? await tripApi('trip-update', { ...payload, currentSlug: activeTrip.slug })

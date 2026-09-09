@@ -1,6 +1,6 @@
 import { $ } from '../shared/dom.js';
 
-export function renderTripShell(settings, { onOpenDetails, onChangeTrip }) {
+export function renderTripShell(settings, { onOpenDetails, onChangeTrip, onConfigure }) {
   const shell = $('tripShell');
   shell.innerHTML = `
     <button id="openTripDetails" class="btn btn-dark position-fixed top-0 end-0 m-3 rounded-pill z-3" type="button">✨ Mi viaje</button>
@@ -21,6 +21,7 @@ export function renderTripShell(settings, { onOpenDetails, onChangeTrip }) {
         <div class="progress rounded-pill"><div id="progressBar" class="progress-bar"></div></div>
         <p id="targetInfo" class="small trip-muted mt-3 mb-1">Calculando fecha…</p>
         <p id="photoCredit" class="photo-credit mb-0"></p>
+        <button id="configureTrip" class="btn btn-outline-light btn-sm mt-3 d-none" type="button">Configurar apariencia</button>
       </section>
     </main>`;
 
@@ -40,5 +41,9 @@ export function renderTripShell(settings, { onOpenDetails, onChangeTrip }) {
 
   $('openTripDetails').addEventListener('click', onOpenDetails);
   $('quickChangeTrip').addEventListener('click', onChangeTrip);
+  if (onConfigure) {
+    $('configureTrip').classList.remove('d-none');
+    $('configureTrip').addEventListener('click', onConfigure);
+  }
   shell.setAttribute('aria-hidden', 'false');
 }
