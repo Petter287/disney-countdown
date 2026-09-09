@@ -1,6 +1,6 @@
 import { $ } from '../shared/dom.js';
 
-export function renderTripShell(settings, { onOpenDetails, onChangeTrip, onConfigure }) {
+export function renderTripShell(settings, { onOpenDetails, onChangeTrip, onConfigure, onManageParticipants }) {
   const shell = $('tripShell');
   shell.innerHTML = `
     <button id="openTripDetails" class="btn btn-dark position-fixed top-0 end-0 m-3 rounded-pill z-3" type="button">✨ Mi viaje</button>
@@ -21,7 +21,10 @@ export function renderTripShell(settings, { onOpenDetails, onChangeTrip, onConfi
         <div class="progress rounded-pill"><div id="progressBar" class="progress-bar"></div></div>
         <p id="targetInfo" class="small trip-muted mt-3 mb-1">Calculando fecha…</p>
         <p id="photoCredit" class="photo-credit mb-0"></p>
-        <button id="configureTrip" class="btn btn-outline-light btn-sm mt-3 d-none" type="button">Configurar apariencia</button>
+        <div id="tripManagementActions" class="d-flex flex-wrap justify-content-center gap-2 mt-3 d-none">
+          <button id="configureTrip" class="btn btn-outline-light btn-sm d-none" type="button">🎨 Configurar apariencia</button>
+          <button id="manageTripParticipants" class="btn btn-outline-info btn-sm d-none" type="button">👥 Participantes</button>
+        </div>
       </section>
     </main>`;
 
@@ -41,9 +44,18 @@ export function renderTripShell(settings, { onOpenDetails, onChangeTrip, onConfi
 
   $('openTripDetails').addEventListener('click', onOpenDetails);
   $('quickChangeTrip').addEventListener('click', onChangeTrip);
+
   if (onConfigure) {
+    $('tripManagementActions').classList.remove('d-none');
     $('configureTrip').classList.remove('d-none');
     $('configureTrip').addEventListener('click', onConfigure);
   }
+
+  if (onManageParticipants) {
+    $('tripManagementActions').classList.remove('d-none');
+    $('manageTripParticipants').classList.remove('d-none');
+    $('manageTripParticipants').addEventListener('click', onManageParticipants);
+  }
+
   shell.setAttribute('aria-hidden', 'false');
 }
