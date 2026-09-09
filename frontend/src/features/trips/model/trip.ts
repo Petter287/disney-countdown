@@ -50,3 +50,27 @@ export interface TripDetail {
   permissions: TripPermission[];
   settings: TripSettings;
 }
+
+export interface TripManageDetail {
+  trip: Trip;
+  settings: {
+    defaultTimezone: string;
+    backgroundUrl?: string | null;
+  };
+}
+
+export interface TripMutationInput {
+  slug: string;
+  name: string;
+  destination: string;
+  countryCode: string;
+  regionCode: string | null;
+  startsOn: string;
+  endsOn: string | null;
+  defaultTimezone: string;
+}
+
+export interface TripMutationResponse {
+  ok: true;
+  trip: Trip;
+}
