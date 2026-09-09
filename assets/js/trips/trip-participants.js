@@ -6,6 +6,7 @@ let roles = [];
 let callbacks = {};
 let generation = 0;
 let busy = false;
+let availableCount = 0;
 
 function ensureUi() {
   if ($('tripParticipantsGate')) return;
@@ -69,13 +70,13 @@ function ensureUi() {
             <h2 id="addParticipantsTitle" class="h5 fw-bold mb-1">Agregar participantes</h2>
             <p class="small trip-muted">Solo aparecen usuarios existentes con acceso global activo y que todavía no pertenecen al viaje.</p>
             <form id="tripParticipantsForm" autocomplete="off">
-              <label class="form-label" for="tripParticipantsAvailable">Usuarios disponibles</label>
+              <div class="form-label">Usuarios disponibles</div>
               <div id="tripParticipantsAvailable" class="available-users participant-available-list mb-3"></div>
 
               <label for="tripParticipantsRole" class="form-label">Rol para seleccionados</label>
-              <select id="tripParticipantsRole" class="form-select" required></select>
+              <select id="tripParticipantsRole" class="form-select" required disabled></select>
 
-              <button id="tripParticipantsAdd" class="btn btn-trip w-100 mt-3" type="submit">Agregar seleccionados</button>
+              <button id="tripParticipantsAdd" class="btn btn-trip w-100 mt-3" type="submit" disabled>Agregar seleccionados</button>
             </form>
           </section>
         </div>
@@ -91,12 +92,13 @@ function activeRef() {
 
 function setBusy(value) {
   busy = value;
-  $('tripParticipantsBack').disabled = value;
-  $('tripParticipantsAdd').disabled = value;
-  $('tripParticipantsRole').disabled = value;
   for (const control of $('tripParticipantsGate').querySelectorAll('button, select, input')) {
     if (control.id === 'tripParticipantsLogout') continue;
-    if (value) control.disabled = true;
+    control.disabled = value;
+  }
+  if (!value && availableCount === 0) {
+    $('tripParticipantsRole').disabled = true;
+    $('tripParticipantsAdd').disabled = true;
   }
 }
 
@@ -200,11 +202,14 @@ function renderMembers(members) {
         try {
           await tripApi('update-role', { ...activeRef(), userId: member.userId, role: nextRole });
           setStatus($('tripParticipantsStatus'), 'Rol actualizado.', 'ok');
-          await loadTripParticipants();
+          const refreshed = await loadTripParticipants();
+          if (!refreshed && document.contains(roleSelect)) roleSelect.disabled = false;
         } catch (error) {
           roleSelect.value = previousRole;
           roleSelect.disabled = false;
-          setStatus($('tripParticipantsStatus'), error.message || 'No se pudo actualizar el rol.', 'error');
+          if (error.message !== 'SESSION_EXPIRED') {
+            setStatus($('tripParticipantsStatus'), error.message || 'No se pudo actualizar el rol.', 'error');
+          }
         }
       });
       roleGroup.append(label, roleSelect);
@@ -220,10 +225,13 @@ function renderMembers(members) {
         try {
           await tripApi('remove', { ...activeRef(), userId: member.userId });
           setStatus($('tripParticipantsStatus'), 'Participante quitado del viaje.', 'ok');
-          await loadTripParticipants();
+          const refreshed = await loadTripParticipants();
+          if (!refreshed && document.contains(remove)) remove.disabled = false;
         } catch (error) {
           remove.disabled = false;
-          setStatus($('tripParticipantsStatus'), error.message || 'No se pudo quitar al participante.', 'error');
+          if (error.message !== 'SESSION_EXPIRED') {
+            setStatus($('tripParticipantsStatus'), error.message || 'No se pudo quitar al participante.', 'error');
+          }
         }
       });
 
@@ -238,12 +246,14 @@ function renderMembers(members) {
 function renderAvailableUsers(users) {
   const container = $('tripParticipantsAvailable');
   container.replaceChildren();
+  availableCount = users.length;
 
   if (!users.length) {
     const empty = document.createElement('div');
     empty.className = 'participant-empty p-3 small trip-muted';
     empty.textContent = 'No hay usuarios activos disponibles para agregar.';
     container.append(empty);
+    $('tripParticipantsRole').disabled = true;
     $('tripParticipantsAdd').disabled = true;
     return;
   }
@@ -273,16 +283,17 @@ function renderAvailableUsers(users) {
     container.append(row);
   }
 
+  $('tripParticipantsRole').disabled = false;
   $('tripParticipantsAdd').disabled = false;
 }
 
 export async function loadTripParticipants() {
-  if (!activeTrip) return;
+  if (!activeTrip) return false;
   const requestGeneration = generation;
   setStatus($('tripParticipantsStatus'), 'Cargando participantes…');
   try {
     const result = await tripApi('trip-admin', activeRef());
-    if (requestGeneration !== generation || !activeTrip) return;
+    if (requestGeneration !== generation || !activeTrip) return false;
     roles = result.roles || [];
     const members = result.members || [];
     const availableUsers = result.availableUsers || [];
@@ -291,10 +302,12 @@ export async function loadTripParticipants() {
     renderAvailableUsers(availableUsers);
     renderSummary(members, availableUsers);
     setStatus($('tripParticipantsStatus'));
+    return true;
   } catch (error) {
-    if (requestGeneration === generation) {
+    if (requestGeneration === generation && error.message !== 'SESSION_EXPIRED') {
       setStatus($('tripParticipantsStatus'), error.message || 'No se pudieron cargar los participantes.', 'error');
     }
+    return false;
   }
 }
 
@@ -314,6 +327,7 @@ export function hideTripParticipants() {
   activeTrip = null;
   roles = [];
   busy = false;
+  availableCount = 0;
   const gate = $('tripParticipantsGate');
   if (!gate) return;
   gate.classList.remove('visible');
@@ -322,6 +336,8 @@ export function hideTripParticipants() {
   $('tripParticipantsMembers').replaceChildren();
   $('tripParticipantsAvailable').replaceChildren();
   $('tripParticipantsRole').replaceChildren();
+  $('tripParticipantsRole').disabled = true;
+  $('tripParticipantsAdd').disabled = true;
   $('tripParticipantsTripName').textContent = '';
   $('tripParticipantsCount').textContent = '0';
   $('tripParticipantsActiveCount').textContent = '0';
@@ -362,7 +378,7 @@ export function bindTripParticipants(handlers = {}) {
       setStatus($('tripParticipantsStatus'), selected.length === 1 ? 'Participante agregado.' : 'Participantes agregados.', 'ok');
       await loadTripParticipants();
     } catch (error) {
-      if (requestGeneration === generation) {
+      if (requestGeneration === generation && error.message !== 'SESSION_EXPIRED') {
         setStatus($('tripParticipantsStatus'), error.message || 'No se pudieron agregar los participantes.', 'error');
       }
     } finally {
