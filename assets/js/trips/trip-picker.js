@@ -5,7 +5,7 @@ function displayName(profile) {
   return profile?.displayName?.trim() || profile?.email?.split('@')[0] || 'viajero';
 }
 
-export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTrip, onConfigureTrip) {
+export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTrip, onConfigureTrip, onManageParticipants) {
   $('tripGreeting').textContent = `Hola, ${displayName(profile)} 👋`;
   $('systemOwnerActions').classList.toggle('visible', profile?.systemOwner === true);
   $('tripList').replaceChildren();
@@ -49,23 +49,37 @@ export function renderTripPicker(profile, accessibleTrips, onOpenTrip, onEditTri
     button.addEventListener('click', () => onOpenTrip(access));
     wrapper.append(button);
 
+    const actions = document.createElement('div');
+    actions.className = 'd-flex flex-wrap gap-2';
+
     if (profile?.systemOwner && onEditTrip) {
       const edit = document.createElement('button');
       edit.type = 'button';
-      edit.className = 'btn btn-outline-light btn-sm';
+      edit.className = 'btn btn-outline-light btn-sm flex-grow-1';
       edit.textContent = '✏️ Editar viaje';
       edit.addEventListener('click', () => onEditTrip(access));
-      wrapper.append(edit);
+      actions.append(edit);
     }
 
     if ((access.permissions || []).includes('trip.edit') && onConfigureTrip) {
       const configure = document.createElement('button');
       configure.type = 'button';
-      configure.className = 'btn btn-outline-light btn-sm';
-      configure.textContent = 'Configurar apariencia';
+      configure.className = 'btn btn-outline-light btn-sm flex-grow-1';
+      configure.textContent = '🎨 Apariencia';
       configure.addEventListener('click', () => onConfigureTrip(access));
-      wrapper.append(configure);
+      actions.append(configure);
     }
+
+    if ((access.permissions || []).includes('members.manage') && onManageParticipants) {
+      const participants = document.createElement('button');
+      participants.type = 'button';
+      participants.className = 'btn btn-outline-info btn-sm flex-grow-1';
+      participants.textContent = '👥 Participantes';
+      participants.addEventListener('click', () => onManageParticipants(access));
+      actions.append(participants);
+    }
+
+    if (actions.childElementCount) wrapper.append(actions);
 
     col.append(wrapper);
     $('tripList').append(col);
