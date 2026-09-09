@@ -1,0 +1,10 @@
+.trip-participants-panel{width:min(1120px,100%)}
+.participant-summary-card,.participant-section{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.11);border-radius:1rem}
+.participant-summary-value{font-size:1.65rem;font-weight:850;line-height:1;color:var(--trip-soft)}
+.participant-member-row{border:1px solid rgba(255,255,255,.08)}
+.participant-member-actions .form-select{min-width:150px}
+.participant-available-list{max-height:330px;overflow:auto;border-radius:.85rem}
+.participant-available-user{padding:.75rem .8rem}
+.participant-empty{background:rgba(255,255,255,.035);border:1px dashed rgba(255,255,255,.12);border-radius:.8rem}
+.min-w-0{min-width:0}
+@media(max-width:575.98px){.trip-participants-panel{padding:1.25rem!important}.participant-summary-value{font-size:1.4rem}.participant-member-actions .form-select{width:100%}}
