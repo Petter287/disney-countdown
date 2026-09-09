@@ -1,7 +1,7 @@
 export type TripPermission = 'trip.view' | 'trip.edit' | 'members.manage' | string;
 
 export interface Role {
-  id: number | string;
+  id?: number | string;
   code: string;
   name: string;
 }
@@ -18,10 +18,12 @@ export interface Trip {
 }
 
 export interface TripMembership {
-  userId: string;
+  tripId: string;
+  roleId?: number | string;
   role?: Role | null;
   permissions?: TripPermission[];
   isOwner?: boolean;
+  trip?: Trip | null;
 }
 
 export interface TripAccess {
@@ -41,4 +43,10 @@ export interface TripSettings {
   backgroundUrl?: string | null;
   photoCredit?: string | null;
   updatedAt?: string | null;
+}
+
+export interface TripDetail {
+  trip: Pick<Trip, 'id' | 'slug'>;
+  permissions: TripPermission[];
+  settings: TripSettings;
 }

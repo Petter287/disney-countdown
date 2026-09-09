@@ -2,9 +2,12 @@ import { Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RootRedirect } from '../features/auth/RootRedirect';
 import { SessionShell } from '../features/auth/SessionShell';
+import { TripsProvider } from '../features/trips/TripsProvider';
 import { AuthenticatedPlaceholderPage } from '../pages/AuthenticatedPlaceholderPage';
 import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 import { LoginPage } from '../pages/LoginPage';
+import { TripDetailPage } from '../pages/TripDetailPage';
+import { TripsPage } from '../pages/TripsPage';
 
 export function App() {
   return (
@@ -15,11 +18,14 @@ export function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<SessionShell />}>
-          <Route path="/trips" element={<AuthenticatedPlaceholderPage title="Mis viajes" />} />
-          <Route path="/trips/:slug" element={<AuthenticatedPlaceholderPage title="Detalle del viaje" />} />
-          <Route path="/trips/:slug/edit" element={<AuthenticatedPlaceholderPage title="Editar viaje" />} />
-          <Route path="/trips/:slug/settings" element={<AuthenticatedPlaceholderPage title="Apariencia del viaje" />} />
-          <Route path="/trips/:slug/participants" element={<AuthenticatedPlaceholderPage title="Participantes" />} />
+          <Route element={<TripsProvider />}>
+            <Route path="/trips" element={<TripsPage />} />
+            <Route path="/trips/new" element={<AuthenticatedPlaceholderPage title="Crear viaje" />} />
+            <Route path="/trips/:slug" element={<TripDetailPage />} />
+            <Route path="/trips/:slug/edit" element={<AuthenticatedPlaceholderPage title="Editar viaje" />} />
+            <Route path="/trips/:slug/settings" element={<AuthenticatedPlaceholderPage title="Apariencia del viaje" />} />
+            <Route path="/trips/:slug/participants" element={<AuthenticatedPlaceholderPage title="Participantes" />} />
+          </Route>
           <Route path="/users" element={<AuthenticatedPlaceholderPage title="Usuarios del sistema" />} />
         </Route>
       </Route>
