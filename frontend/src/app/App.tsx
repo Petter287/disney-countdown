@@ -5,9 +5,9 @@ import { SessionShell } from '../features/auth/SessionShell';
 import { SystemOwnerRoute } from '../features/auth/SystemOwnerRoute';
 import { TripPermissionRoute } from '../features/trips/TripPermissionRoute';
 import { TripsProvider } from '../features/trips/TripsProvider';
-import { AuthenticatedPlaceholderPage } from '../pages/AuthenticatedPlaceholderPage';
 import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 import { LoginPage } from '../pages/LoginPage';
+import { SystemUsersPage } from '../pages/SystemUsersPage';
 import { TripCreatePage } from '../pages/TripCreatePage';
 import { TripDetailPage } from '../pages/TripDetailPage';
 import { TripEditPage } from '../pages/TripEditPage';
@@ -38,7 +38,9 @@ export function App() {
               <Route path="/trips/:slug/participants" element={<TripParticipantsPage />} />
             </Route>
           </Route>
-          <Route path="/users" element={<AuthenticatedPlaceholderPage title="Usuarios del sistema" />} />
+          <Route element={<SystemOwnerRoute />}>
+            <Route path="/users" element={<SystemUsersPage />} />
+          </Route>
         </Route>
       </Route>
 
