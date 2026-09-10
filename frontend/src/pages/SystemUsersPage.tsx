@@ -29,6 +29,17 @@ function userIdentity(user: SystemUser) {
   return user.displayName?.trim() || user.email;
 }
 
+function normalizePayload(payload: SystemUsersPayload): SystemUsersPayload {
+  return {
+    users: (payload.users || []).map((user) => ({
+      ...user,
+      memberships: Array.isArray(user.memberships) ? user.memberships : [],
+    })),
+    trips: Array.isArray(payload.trips) ? payload.trips : [],
+    roles: Array.isArray(payload.roles) ? payload.roles : [],
+  };
+}
+
 function fallbackRole(payload: SystemUsersPayload | null) {
   return payload?.roles.find((role) => role.code === 'viewer')?.code || payload?.roles[0]?.code || 'viewer';
 }
@@ -60,12 +71,15 @@ export function SystemUsersPage() {
 
   const clearEditor = (payload: SystemUsersPayload | null = data) => {
     setEditingUserId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM });
     setAssignments(buildAssignmentDraft(payload?.trips || [], null, fallbackRole(payload)));
     setFormMessage('');
   };
 
-  const editUser = (user: SystemUser, payload: SystemUsersPayload = data!) => {
+  const editUser = (user: SystemUser, payload?: SystemUsersPayload) => {
+    const source = payload || data;
+    if (!source) return;
+
     setEditingUserId(user.id);
     setForm({
       displayName: user.displayName || '',
@@ -73,14 +87,16 @@ export function SystemUsersPage() {
       temporaryPassword: '',
       enabled: user.enabled,
     });
-    setAssignments(buildAssignmentDraft(payload.trips, user, fallbackRole(payload)));
+    setAssignments(buildAssignmentDraft(source.trips, user, fallbackRole(source)));
     setFormMessage('');
   };
 
-  const applyPayload = (payload: SystemUsersPayload, preferredEditorId: string | null = null) => {
+  const applyPayload = (rawPayload: SystemUsersPayload, preferredEditorId: string | null = null) => {
+    const payload = normalizePayload(rawPayload);
     setData(payload);
     setStatus('ready');
     setError('');
+
     if (preferredEditorId) {
       const nextUser = payload.users.find((user) => user.id === preferredEditorId);
       if (nextUser) {
@@ -88,6 +104,7 @@ export function SystemUsersPage() {
         return;
       }
     }
+
     clearEditor(payload);
   };
 
@@ -135,11 +152,32 @@ export function SystemUsersPage() {
     else setFormMessage(message);
   };
 
+  const setFormField = <K extends keyof SystemUserFormValues>(field: K, value: SystemUserFormValues[K]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFormMessage('');
+  };
+
+  const updateAssignment = (tripId: string, patch: Partial<AssignmentDraft[string]>) => {
+    setAssignments((current) => {
+      const existing = current[tripId] || {
+        selected: false,
+        role: fallbackRole(data),
+        locked: false,
+      };
+      return {
+        ...current,
+        [tripId]: { ...existing, ...patch },
+      };
+    });
+    setFormMessage('');
+  };
+
   const toggleAccess = async (user: SystemUser) => {
     if (busy || user.systemOwner) return;
     const screenGeneration = generation.current;
     setBusy(true);
     setPageMessage(user.enabled ? 'Deshabilitando acceso…' : 'Habilitando acceso…');
+
     try {
       await toggleSystemUserAccess(user.id, !user.enabled);
       if (generation.current !== screenGeneration) return;
@@ -196,14 +234,6 @@ export function SystemUsersPage() {
     } finally {
       if (generation.current === screenGeneration) setBusy(false);
     }
-  };
-
-  const updateAssignment = (tripId: string, patch: Partial<AssignmentDraft[string]>) => {
-    setAssignments((current) => ({
-      ...current,
-      [tripId]: { ...current[tripId], ...patch },
-    }));
-    setFormMessage('');
   };
 
   if (status === 'loading') {
@@ -317,7 +347,10 @@ export function SystemUsersPage() {
                   value={form.displayName}
                   maxLength={120}
                   required
-                  onChange={(event) => setForm((current) => ({ ...current, displayName: event.currentTarget.value }))}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setFormField('displayName', value);
+                  }}
                 />
               </label>
 
@@ -329,7 +362,10 @@ export function SystemUsersPage() {
                   maxLength={254}
                   required
                   autoComplete="off"
-                  onChange={(event) => setForm((current) => ({ ...current, email: event.currentTarget.value }))}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setFormField('email', value);
+                  }}
                 />
               </label>
 
@@ -342,7 +378,10 @@ export function SystemUsersPage() {
                     minLength={8}
                     required
                     autoComplete="new-password"
-                    onChange={(event) => setForm((current) => ({ ...current, temporaryPassword: event.currentTarget.value }))}
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      setFormField('temporaryPassword', value);
+                    }}
                   />
                   <small>8+ caracteres con mayúscula, minúscula, número y símbolo. El usuario deberá cambiarla al ingresar.</small>
                 </label>
@@ -354,7 +393,10 @@ export function SystemUsersPage() {
                     type="checkbox"
                     checked={form.enabled}
                     disabled={editingUser.systemOwner || busy}
-                    onChange={(event) => setForm((current) => ({ ...current, enabled: event.currentTarget.checked }))}
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
+                      setFormField('enabled', checked);
+                    }}
                   />
                   <span>Acceso al sistema habilitado</span>
                   {editingUser.systemOwner ? <small>El System Owner no puede ser deshabilitado.</small> : null}
@@ -376,7 +418,10 @@ export function SystemUsersPage() {
                           type="checkbox"
                           checked={entry.selected}
                           disabled={entry.locked || busy}
-                          onChange={(event) => updateAssignment(trip.id, { selected: event.currentTarget.checked })}
+                          onChange={(event) => {
+                            const checked = event.currentTarget.checked;
+                            updateAssignment(trip.id, { selected: checked });
+                          }}
                         />
                         <span>
                           <strong>{trip.name}</strong>
@@ -387,7 +432,10 @@ export function SystemUsersPage() {
                         aria-label={`Rol en ${trip.name}`}
                         value={entry.role}
                         disabled={!entry.selected || entry.locked || busy}
-                        onChange={(event) => updateAssignment(trip.id, { role: event.currentTarget.value })}
+                        onChange={(event) => {
+                          const role = event.currentTarget.value;
+                          updateAssignment(trip.id, { role });
+                        }}
                       >
                         {data.roles.map((role) => <option value={role.code} key={role.code}>{role.name}</option>)}
                       </select>
